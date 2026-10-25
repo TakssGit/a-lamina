@@ -1,4 +1,4 @@
-// a-lamina - Bloc 4 : Direction Artistique Cristaux, Floating Text, Screen Shake & Audio Mute
+// a-lamina - Bloc 5 : Wrapper SDK Publicitaire Officiel (Poki / GameDistribution Ready)
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -39,17 +39,38 @@ let floatingTexts = [];
 let shakeTime = 0;
 let isMuted = false;
 
-// --- GESTION MUTE AUDIO ---
-muteBtn.addEventListener('click', () => {
-    isMuted = !isMuted;
-    muteBtn.textContent = isMuted ? "🔇" : "🔊";
-});
+// --- INITIALISATION DU SDK PARTENAIRE (Poki / GameDistribution) ---
+let commercialBreakActive = false;
 
-// --- GESTION DU SDK PUBLICITAIRE (Simulation) ---
-function showAd(type, callback) {
+function initAdsSDK() {
+    // Si le SDK Poki ou autre est injecté par la plateforme parente
+    if (window.PokiSDK) {
+        window.PokiSDK.gameLoadingFinished();
+    }
+}
+
+// Fonction universelle pour afficher les pubs (interstitielle ou récompensée)
+function requestAd(type, onComplete) {
     let previousState = gameState;
     gameState = 'AD_LOADING';
-    
+
+    // 1. Si le SDK Poki est présent dans l'environnement de production
+    if (window.PokiSDK) {
+        if (type === 'reward') {
+            window.PokiSDK.rewardedBreak().then((success) => {
+                gameState = previousState;
+                onComplete(success);
+            });
+        } else {
+            window.PokiSDK.commercialBreak().then(() => {
+                gameState = previousState;
+                onComplete(true);
+            });
+        }
+        return;
+    }
+
+    // 2. Mode Simulation (pour le développement local et GitHub Pages)
     let adOverlay = document.createElement('div');
     adOverlay.style.position = 'absolute';
     adOverlay.style.top = '0';
@@ -65,7 +86,7 @@ function showAd(type, callback) {
     adOverlay.style.color = '#f8fafc';
     adOverlay.style.fontFamily = 'Segoe UI, sans-serif';
     
-    let title = type === 'reward' ? "Publicité Récompensée" : "Publicité Interstitielle";
+    let title = type === 'reward' ? "Publicité Récompensée (Simulée)" : "Publicité Interstitielle (Simulée)";
     adOverlay.innerHTML = `
         <h2 style="color: #38bdf8; margin-bottom: 10px;">${title}</h2>
         <p style="color: #94a3b8; margin-bottom: 20px;">Chargement de l'annonce partenaire...</p>
@@ -84,10 +105,16 @@ function showAd(type, callback) {
             clearInterval(timerInterval);
             document.body.removeChild(adOverlay);
             gameState = previousState;
-            if (callback) callback(true);
+            onComplete(true);
         }
     }, 1000);
 }
+
+// --- GESTION MUTE AUDIO ---
+muteBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    muteBtn.textContent = isMuted ? "🔇" : "🔊";
+});
 
 // --- LOCALSTORAGE ---
 function updateHighScore() {
@@ -174,17 +201,10 @@ function createParticles(pixelX, pixelY, color) {
 }
 
 function addFloatingText(text, x, y, color = '#fbbf24') {
-    floatingTexts.push({
-        text: text,
-        x: x,
-        y: y,
-        alpha: 1,
-        color: color
-    });
+    floatingTexts.push({ text: text, x: x, y: y, alpha: 1, color: color });
 }
 
 function updateAndDrawEffects() {
-    // Particules
     for (let i = particles.length - 1; i >= 0; i--) {
         let p = particles[i];
         p.x += p.vx; p.y += p.vy; p.alpha -= 0.04;
@@ -201,7 +221,6 @@ function updateAndDrawEffects() {
         }
     }
 
-    // Textes flottants (+50 PTS)
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
         let ft = floatingTexts[i];
         ft.y -= 1.5;
@@ -220,7 +239,7 @@ function updateAndDrawEffects() {
     }
 }
 
-// --- RENDU DES GEMMES STYLE CRISTAUX EN CANVAS ---
+// --- RENDU DES GEMMES ---
 function drawGem(r, c, typeIdx) {
     let gem = GEM_TYPES[typeIdx];
     let cx = c * TILE_SIZE + TILE_SIZE / 2;
@@ -230,18 +249,16 @@ function drawGem(r, c, typeIdx) {
     ctx.save();
     ctx.translate(cx, cy);
 
-    // Ombre sous la gemme
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.beginPath();
     ctx.arc(2, 4, size, 0, Math.PI * 2);
     ctx.fill();
 
-    // Rendu des facettes selon le type de cristal
     ctx.fillStyle = gem.color;
     ctx.strokeStyle = gem.dark;
     ctx.lineWidth = 2;
 
-    if (gem.shape === 'diamond') { // Losange (Rubis)
+    if (gem.shape === 'diamond') {
         ctx.beginPath();
         ctx.moveTo(0, -size); ctx.lineTo(size, 0); ctx.lineTo(0, size); ctx.lineTo(-size, 0);
         ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -251,7 +268,7 @@ function drawGem(r, c, typeIdx) {
         ctx.moveTo(0, -size); ctx.lineTo(size * 0.4, 0); ctx.lineTo(0, size * 0.4); ctx.lineTo(-size * 0.4, 0);
         ctx.closePath(); ctx.fill();
     } 
-    else if (gem.shape === 'rhombus') { // Carré facetté (Saphir)
+    else if (gem.shape === 'rhombus') {
         ctx.beginPath();
         ctx.rect(-size*0.8, -size*0.8, size*1.6, size*1.6);
         ctx.fill(); ctx.stroke();
@@ -261,7 +278,7 @@ function drawGem(r, c, typeIdx) {
         ctx.rect(-size*0.4, -size*0.4, size*0.8, size*0.8);
         ctx.fill();
     }
-    else if (gem.shape === 'circle') { // Sphere brillante (Topaze)
+    else if (gem.shape === 'circle') {
         ctx.beginPath();
         ctx.arc(0, 0, size * 0.9, 0, Math.PI * 2);
         ctx.fill(); ctx.stroke();
@@ -271,7 +288,7 @@ function drawGem(r, c, typeIdx) {
         ctx.arc(-size*0.3, -size*0.3, size * 0.3, 0, Math.PI * 2);
         ctx.fill();
     }
-    else if (gem.shape === 'hexagon') { // Hexagone (Émeraude)
+    else if (gem.shape === 'hexagon') {
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             let angle = (Math.PI / 3) * i;
@@ -334,12 +351,11 @@ function checkInitialMatches() {
     return false;
 }
 
-// --- RENDU CANVAS AVEC SCREEN SHAKE ---
+// --- RENDU CANVAS ---
 function draw() {
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Effet de Secousse (Screen Shake)
     if (shakeTime > 0) {
         let dx = (Math.random() - 0.5) * 8;
         let dy = (Math.random() - 0.5) * 8;
@@ -347,7 +363,6 @@ function draw() {
         shakeTime--;
     }
 
-    // Grille de fond
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             ctx.strokeStyle = '#1e293b';
@@ -432,7 +447,7 @@ window.addEventListener('blur', () => {
 window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && gameState === 'GAMEOVER') {
         e.preventDefault();
-        showAd('reward', (success) => {
+        requestAd('reward', (success) => {
             if (success) {
                 movesLeft += 5;
                 movesEl.textContent = movesLeft;
@@ -454,7 +469,7 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
     }
     if (gameState === 'VICTORY') {
-        showAd('interstitial', () => {
+        requestAd('interstitial', () => {
             if (currentLevel < 3) {
                 currentLevel++;
             } else {
@@ -552,7 +567,6 @@ function processMatches(matches) {
     scoreEl.textContent = score;
     updateHighScore();
 
-    // Déclencher le Screen Shake et ajouter le texte flottant
     shakeTime = 8;
     let avgX = 0, avgY = 0;
 
@@ -619,5 +633,6 @@ function checkGameStatus() {
     }
 }
 
-// Initialisation au chargement
+// Initialisation au chargement et du SDK Ads
+initAdsSDK();
 draw();
