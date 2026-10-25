@@ -1,4 +1,4 @@
-// a-lamina - Système de Niveaux Progressifs et Menus Dynamiques
+// a-lamina - Niveaux, Effets, Son et Gestion de la Pause Automatique
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -13,7 +13,6 @@ let grid = [];
 let score = 0;
 let currentLevel = 1;
 
-// Configuration des niveaux
 let levelConfig = {
     1: { target: 500, moves: 15, name: "Niveau 1 : Alignez 3 blocs" },
     2: { target: 800, moves: 14, name: "Niveau 2 : Défi Stratégique" },
@@ -25,7 +24,7 @@ let movesLeft = levelConfig[currentLevel].moves;
 
 let selectedTile = null;
 let isAnimating = false;
-let gameState = 'PLAYING'; // 'PLAYING', 'VICTORY', 'GAMEOVER'
+let gameState = 'PLAYING'; // 'PLAYING', 'VICTORY', 'GAMEOVER', 'PAUSED'
 let particles = [];
 
 // --- SYSTÈME AUDIO (Web Audio API) ---
@@ -37,6 +36,7 @@ function initAudio() {
 }
 
 function playSound(type) {
+    if (gameState === 'PAUSED') return; // Ne pas jouer de son en pause
     try {
         initAudio();
         if (!audioCtx) return;
@@ -177,11 +177,13 @@ function draw() {
 
     updateAndDrawParticles();
 
-    // Affichage des menus de fin de partie directement sur le Canvas
+    // Affichage des états (Victoire, Défaite, Pause)
     if (gameState === 'VICTORY') {
         drawOverlay("VICTOIRE !", "#34d399", currentLevel < 3 ? "Cliquez pour le Niveau Suivant" : "Jeu Terminé ! Félicitations !");
     } else if (gameState === 'GAMEOVER') {
         drawOverlay("RATÉ !", "#f43f5e", "Cliquez pour Recommencer");
+    } else if (gameState === 'PAUSED') {
+        drawOverlay("EN PAUSE", "#38bdf8", "Cliquez pour Reprendre");
     }
 
     if (particles.length > 0 || gameState !== 'PLAYING') {
@@ -203,7 +205,27 @@ function drawOverlay(title, color, subtitle) {
     ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 25);
 }
 
+// --- GESTION DU FOCUS / PAUSE AUTOMATIQUE ---
+window.addEventListener('blur', () => {
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED';
+        draw();
+    }
+});
+
+window.addEventListener('focus', () => {
+    if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        draw();
+    }
+});
+
 canvas.addEventListener('pointerdown', (e) => {
+    if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        draw();
+        return;
+    }
     if (gameState === 'VICTORY') {
         if (currentLevel < 3) {
             currentLevel++;
