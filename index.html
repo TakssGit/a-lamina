@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>A-LAMINA - Niveau 1</title>
+    <title>A-LAMINA - Match 3 Puzzle</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -16,34 +16,56 @@
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
+            touch-action: none;
         }
         #game-container {
             text-align: center;
             background: #1e293b;
-            padding: 20px;
+            padding: 15px;
             border-radius: 16px;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
             border: 2px solid #334155;
+            position: relative;
+            max-width: 440px;
+            width: 100%;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
         }
         h1 {
-            margin-bottom: 5px;
             color: #f43f5e;
             letter-spacing: 2px;
-            font-size: 1.8rem;
+            font-size: 1.6rem;
         }
+        #pause-btn {
+            background: #334155;
+            color: #f8fafc;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        #pause-btn:hover { background: #475569; }
         #level-info {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: #94a3b8;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+            text-align: left;
         }
         .hud {
             display: flex;
             justify-content: space-around;
-            margin-bottom: 15px;
-            font-size: 1rem;
+            margin-bottom: 12px;
+            font-size: 0.9rem;
             background: #0f172a;
-            padding: 8px 12px;
+            padding: 8px;
             border-radius: 8px;
+            gap: 10px;
         }
         .hud span {
             color: #38bdf8;
@@ -55,27 +77,34 @@
             border-radius: 8px;
             touch-action: none;
             cursor: pointer;
+            width: 100%;
+            height: auto;
+            max-width: 380px;
+            max-height: 380px;
         }
         .instructions {
-            margin-top: 15px;
-            font-size: 0.85rem;
+            margin-top: 12px;
+            font-size: 0.8rem;
             color: #cbd5e1;
         }
     </style>
 </head>
 <body>
     <div id="game-container">
-        <h1>A-LAMINA</h1>
-        <div id="level-info">Niveau 1 : Alignez 3 blocs identiques</div>
+        <div class="header-top">
+            <h1>A-LAMINA</h1>
+            <button id="pause-btn">PAUSE</button>
+        </div>
+        <div id="level-info">Menu Principal</div>
         <div class="hud">
             <div>Score : <span id="score">0</span> / <span id="target-score">500</span></div>
+            <div>Top : <span id="high-score">0</span></div>
             <div>Coups : <span id="moves">15</span></div>
         </div>
         <canvas id="gameCanvas" width="400" height="400"></canvas>
-        <div class="instructions">Cliquez sur deux blocs adjacents pour les �changer !</div>
+        <div class="instructions">Alignez 3 blocs identiques pour marquer des points !</div>
     </div>
 
-    <!-- Lien vers le fichier JavaScript dans le dossier src -->
     <script src="src/game.js"></script>
 </body>
 </html>

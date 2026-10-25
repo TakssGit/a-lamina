@@ -1,9 +1,11 @@
-// a-lamina - Niveaux, Effets, Son et Gestion de la Pause Automatique
+// a-lamina - Bloc 3 : Version Finale (Menu Principal, Niveaux, Effets, Audio, Pause, LocalStorage & SDK Ads)
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
+const highScoreEl = document.getElementById('high-score');
 const movesEl = document.getElementById('moves');
 const levelInfoEl = document.getElementById('level-info');
+const pauseBtn = document.getElementById('pause-btn');
 
 const GRID_SIZE = 6;
 const TILE_SIZE = canvas.width / GRID_SIZE;
@@ -11,7 +13,8 @@ const COLORS = ['#f43f5e', '#38bdf8', '#fbbf24', '#34d399']; // Rouge, Bleu, Jau
 
 let grid = [];
 let score = 0;
-let currentLevel = 1;
+let highScore = parseInt(localStorage.getItem('alamina_highscore')) || 0;
+let currentLevel = parseInt(localStorage.getItem('alamina_level')) || 1;
 
 let levelConfig = {
     1: { target: 500, moves: 15, name: "Niveau 1 : Alignez 3 blocs" },
@@ -19,15 +22,72 @@ let levelConfig = {
     3: { target: 1200, moves: 12, name: "Niveau 3 : Maître Lamina" }
 };
 
-let targetScore = levelConfig[currentLevel].target;
-let movesLeft = levelConfig[currentLevel].moves;
+let targetScore = levelConfig[currentLevel] ? levelConfig[currentLevel].target : levelConfig[1].target;
+let movesLeft = levelConfig[currentLevel] ? levelConfig[currentLevel].moves : levelConfig[1].moves;
 
 let selectedTile = null;
 let isAnimating = false;
-let gameState = 'PLAYING'; // 'PLAYING', 'VICTORY', 'GAMEOVER', 'PAUSED'
+let gameState = 'MENU'; // 'MENU', 'PLAYING', 'VICTORY', 'GAMEOVER', 'PAUSED', 'AD_LOADING'
 let particles = [];
 
-// --- SYSTÈME AUDIO (Web Audio API) ---
+// --- GESTION DU SDK PUBLICITAIRE (Simulation Web Ads) ---
+function showAd(type, callback) {
+    let previousState = gameState;
+    gameState = 'AD_LOADING';
+    
+    let adOverlay = document.createElement('div');
+    adOverlay.style.position = 'absolute';
+    adOverlay.style.top = '0';
+    adOverlay.style.left = '0';
+    adOverlay.style.width = '100%';
+    adOverlay.style.height = '100%';
+    adOverlay.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
+    adOverlay.style.display = 'flex';
+    adOverlay.style.flexDirection = 'column';
+    adOverlay.style.justifyContent = 'center';
+    adOverlay.style.alignItems = 'center';
+    adOverlay.style.zIndex = '1000';
+    adOverlay.style.color = '#f8fafc';
+    adOverlay.style.fontFamily = 'Segoe UI, sans-serif';
+    
+    let title = type === 'reward' ? "Publicité Récompensée" : "Publicité Interstitielle";
+    adOverlay.innerHTML = `
+        <h2 style="color: #38bdf8; margin-bottom: 10px;">${title}</h2>
+        <p style="color: #94a3b8; margin-bottom: 20px;">Chargement de l'annonce partenaire...</p>
+        <div style="font-size: 2rem; font-weight: bold; color: #f43f5e;" id="ad-timer">3</div>
+    `;
+    
+    document.body.appendChild(adOverlay);
+    
+    let timeLeft = 3;
+    let timerInterval = setInterval(() => {
+        timeLeft--;
+        let timerEl = document.getElementById('ad-timer');
+        if (timerEl) timerEl.textContent = timeLeft;
+        
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            document.body.removeChild(adOverlay);
+            gameState = previousState;
+            if (callback) callback(true);
+        }
+    }, 1000);
+}
+
+// --- SAUVEGARDE LOCALSTORAGE ---
+function updateHighScore() {
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('alamina_highscore', highScore);
+    }
+    highScoreEl.textContent = highScore;
+}
+
+function saveProgress() {
+    localStorage.setItem('alamina_level', currentLevel);
+}
+
+// --- AUDIO WEB API ---
 let audioCtx = null;
 function initAudio() {
     if (!audioCtx) {
@@ -36,7 +96,7 @@ function initAudio() {
 }
 
 function playSound(type) {
-    if (gameState === 'PAUSED') return; // Ne pas jouer de son en pause
+    if (gameState === 'PAUSED' || gameState === 'AD_LOADING' || gameState === 'MENU') return;
     try {
         initAudio();
         if (!audioCtx) return;
@@ -85,7 +145,7 @@ function playSound(type) {
     } catch (e) {}
 }
 
-// --- PARTICULES ---
+// --- SYSTÈME DE PARTICULES ---
 function createParticles(pixelX, pixelY, color) {
     for (let i = 0; i < 10; i++) {
         particles.push({
@@ -116,9 +176,14 @@ function updateAndDrawParticles() {
     }
 }
 
-// --- LOGIQUE DU JEU ---
+// --- INITIALISATION DU JEU ---
+function startGame() {
+    gameState = 'PLAYING';
+    loadLevel();
+}
+
 function loadLevel() {
-    let config = levelConfig[currentLevel] || levelConfig[3];
+    let config = levelConfig[currentLevel] || levelConfig[1];
     targetScore = config.target;
     movesLeft = config.moves;
     score = 0;
@@ -126,7 +191,9 @@ function loadLevel() {
     document.getElementById('target-score').textContent = targetScore;
     movesEl.textContent = movesLeft;
     levelInfoEl.textContent = config.name;
-    gameState = 'PLAYING';
+    highScoreEl.textContent = highScore;
+    saveProgress();
+    pauseBtn.textContent = "PAUSE";
     initGrid();
     draw();
 }
@@ -152,10 +219,10 @@ function checkInitialMatches() {
     return false;
 }
 
+// --- RENDU CANVAS ---
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Dessin des blocs
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             const val = grid[r][c];
@@ -177,13 +244,14 @@ function draw() {
 
     updateAndDrawParticles();
 
-    // Affichage des états (Victoire, Défaite, Pause)
-    if (gameState === 'VICTORY') {
-        drawOverlay("VICTOIRE !", "#34d399", currentLevel < 3 ? "Cliquez pour le Niveau Suivant" : "Jeu Terminé ! Félicitations !");
+    if (gameState === 'MENU') {
+        drawOverlay("A-LAMINA", "#f43f5e", "Cliquez ici ou appuyez pour JOUER");
+    } else if (gameState === 'VICTORY') {
+        drawOverlay("VICTOIRE !", "#34d399", currentLevel < 3 ? "Cliquez pour le Niveau Suivant" : "Jeu Terminé ! Recommencer");
     } else if (gameState === 'GAMEOVER') {
-        drawOverlay("RATÉ !", "#f43f5e", "Cliquez pour Recommencer");
+        drawOverlay("RATÉ !", "#f43f5e", "Cliquez pour Recommencer ou [Espace] pour Pub (+5 coups)");
     } else if (gameState === 'PAUSED') {
-        drawOverlay("EN PAUSE", "#38bdf8", "Cliquez pour Reprendre");
+        drawOverlay("EN PAUSE", "#38bdf8", "Cliquez sur Pause pour Reprendre");
     }
 
     if (particles.length > 0 || gameState !== 'PLAYING') {
@@ -192,48 +260,82 @@ function draw() {
 }
 
 function drawOverlay(title, color, subtitle) {
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = color;
     ctx.font = 'bold 36px Segoe UI';
     ctx.textAlign = 'center';
-    ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 20);
+    ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 25);
 
     ctx.fillStyle = '#cbd5e1';
-    ctx.font = '16px Segoe UI';
-    ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 25);
+    ctx.font = '15px Segoe UI';
+    ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 15);
+
+    if (gameState === 'GAMEOVER') {
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 13px Segoe UI';
+        ctx.fillText("💡 Appuyez sur ESPACE pour +5 coups", canvas.width / 2, canvas.height / 2 + 60);
+    }
 }
 
-// --- GESTION DU FOCUS / PAUSE AUTOMATIQUE ---
+// --- GESTION PAUSE & FOCUS ---
+function togglePause() {
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED';
+        pauseBtn.textContent = "REPRENDRE";
+        draw();
+    } else if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        pauseBtn.textContent = "PAUSE";
+        draw();
+    }
+}
+
+pauseBtn.addEventListener('click', togglePause);
+
 window.addEventListener('blur', () => {
     if (gameState === 'PLAYING') {
         gameState = 'PAUSED';
+        pauseBtn.textContent = "REPRENDRE";
         draw();
     }
 });
 
-window.addEventListener('focus', () => {
-    if (gameState === 'PAUSED') {
-        gameState = 'PLAYING';
-        draw();
+// --- INTERACTIONS CLAVIER (Publicité récompensée) ---
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && gameState === 'GAMEOVER') {
+        e.preventDefault();
+        showAd('reward', (success) => {
+            if (success) {
+                movesLeft += 5;
+                movesEl.textContent = movesLeft;
+                gameState = 'PLAYING';
+                draw();
+            }
+        });
     }
 });
 
+// --- INTERACTIONS CLICS CANVAS ---
 canvas.addEventListener('pointerdown', (e) => {
+    if (gameState === 'MENU') {
+        startGame();
+        return;
+    }
     if (gameState === 'PAUSED') {
-        gameState = 'PLAYING';
-        draw();
+        togglePause();
         return;
     }
     if (gameState === 'VICTORY') {
-        if (currentLevel < 3) {
-            currentLevel++;
+        showAd('interstitial', () => {
+            if (currentLevel < 3) {
+                currentLevel++;
+            } else {
+                currentLevel = 1;
+            }
             loadLevel();
-        } else {
-            currentLevel = 1;
-            loadLevel();
-        }
+        });
         return;
     }
     if (gameState === 'GAMEOVER') {
@@ -244,8 +346,10 @@ canvas.addEventListener('pointerdown', (e) => {
     if (isAnimating || movesLeft <= 0 || gameState !== 'PLAYING') return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     
     const c = Math.floor(x / TILE_SIZE);
     const r = Math.floor(y / TILE_SIZE);
@@ -319,6 +423,7 @@ function findMatches() {
 function processMatches(matches) {
     score += matches.length * 50;
     scoreEl.textContent = score;
+    updateHighScore();
 
     matches.forEach(m => {
         let val = grid[m.r][m.c];
@@ -374,5 +479,5 @@ function checkGameStatus() {
     }
 }
 
-// Lancement du jeu
-loadLevel();
+// Initialisation de l'affichage du menu d'accueil au chargement
+draw();
