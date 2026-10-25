@@ -1,4 +1,4 @@
-// a-Lamina - Moteur Complet Corrigé & Fonctionnel
+// a-Lamina - Moteur Complet & Sécurisé
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
