@@ -1,4 +1,4 @@
-// a-Lamina - Moteur complet regroupé (Victory Dashboard, Match-4, Mode Daltonien & Auto-Save)
+// a-Lamina - Moteur avec Intégration Officielle SDK Publicitaire (Poki / Web)
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -221,10 +221,10 @@ puShuffleBtn.addEventListener('click', () => {
     activePowerup = null;
     puHammerBtn.classList.remove('active');
     playSound('bonus');
-    shuffleGrid();
+    shuffleGraph();
 });
 
-function shuffleGrid() {
+function shuffleGraph() {
     isAnimating = true;
     addFloatingText("🔀 MÉLANGE !", canvas.width / 2, canvas.height / 2, '#38bdf8');
     setTimeout(() => {
@@ -285,25 +285,31 @@ function saveProgress() {
 
 window.addEventListener('beforeunload', () => { saveProgress(); });
 
+// 🌐 Gestionnaire officiel des Publicités SDK (Poki / Web Standard Wrapper)
 function requestAd(type, onComplete) {
     let previousState = gameState;
     gameState = 'AD_LOADING';
+    stopBackgroundMusic();
 
+    // Intégration officielle SDK Poki si présent sur le portail
     if (window.PokiSDK) {
         if (type === 'reward') {
             window.PokiSDK.rewardedBreak().then((success) => {
                 gameState = previousState;
+                if (!musicMuted) startBackgroundMusic();
                 onComplete(success);
             });
         } else {
             window.PokiSDK.commercialBreak().then(() => {
                 gameState = previousState;
+                if (!musicMuted) startBackgroundMusic();
                 onComplete(true);
             });
         }
         return;
     }
 
+    // Mode secours (Simulation web locale / GitHub Pages)
     let adOverlay = document.createElement('div');
     adOverlay.id = 'ad-simulation-overlay';
     adOverlay.style.position = 'absolute';
@@ -340,6 +346,7 @@ function requestAd(type, onComplete) {
             let overlayToRemove = document.getElementById('ad-simulation-overlay');
             if (overlayToRemove) document.body.removeChild(overlayToRemove);
             gameState = previousState;
+            if (!musicMuted) startBackgroundMusic();
             if (onComplete) onComplete(true);
         }
     }, 1000);
@@ -878,7 +885,6 @@ function drawLevelMapOverlay() {
     ctx.fillText("⬅️ Menu Principal", canvas.width / 2, btnY + 28);
 }
 
-// 🏆 Tableau de Bord de Fin de Niveau (Victory Dashboard)
 function drawVictoryProgressionOverlay() {
     ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1324,8 +1330,15 @@ function checkGameStatus() {
     }
 }
 
-// Initialisation au chargement
-if (window.PokiSDK) window.PokiSDK.gameLoadingFinished();
+// Initialisation au chargement avec initialisation SDK Poki optionnelle
+if (window.PokiSDK) {
+    window.PokiSDK.init().then(() => {
+        window.PokiSDK.gameLoadingFinished();
+    }).catch(() => {
+        window.PokiSDK.gameLoadingFinished();
+    });
+}
+
 applyThemeVisuals();
 GRID_SIZE = getGridSizeForLevel(currentLevel);
 TILE_SIZE = canvas.width / GRID_SIZE;
