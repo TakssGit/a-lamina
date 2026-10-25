@@ -1,4 +1,4 @@
-// a-Lamina - Moteur avec Intégration Officielle SDK Publicitaire (Poki / Web)
+// a-Lamina - Moteur avec Niveaux Avancés, Obstacles de Glace & SDK Officiel
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -40,7 +40,7 @@ function updatePowerupBadges() {
 }
 
 function getThemeForLevel(lvl) {
-    if (lvl === 1 || lvl === 2) {
+    if (lvl <= 2) {
         return {
             name: "Cristaux Magiques",
             backgroundGradient: "linear-gradient(180deg, #4c1d95 0%, #2e1065 100%)",
@@ -52,7 +52,7 @@ function getThemeForLevel(lvl) {
                 { color: '#34d399', shape: 'hexagon', symbol: '■' }
             ]
         };
-    } else if (lvl === 3 || lvl === 4) {
+    } else if (lvl <= 4) {
         return {
             name: "Fruits Juteux 🍓",
             backgroundGradient: "linear-gradient(180deg, #065f46 0%, #064e3b 100%)",
@@ -64,7 +64,7 @@ function getThemeForLevel(lvl) {
                 { color: '#10b981', shape: 'hexagon', symbol: '🍏' }
             ]
         };
-    } else if (lvl === 5 || lvl === 6) {
+    } else if (lvl <= 6) {
         return {
             name: "Animaux Mignons 🐾",
             backgroundGradient: "linear-gradient(180deg, #1e3a8a 0%, #172554 100%)",
@@ -78,14 +78,14 @@ function getThemeForLevel(lvl) {
         };
     } else {
         return {
-            name: "Bonbonland 🍬",
-            backgroundGradient: "linear-gradient(180deg, #9d174d 0%, #701a75 100%)",
-            borderColor: '#f472b6',
+            name: "Royaume Glacial ❄️",
+            backgroundGradient: "linear-gradient(180deg, #0369a1 0%, #0c4a6e 100%)",
+            borderColor: '#38bdf8',
             items: [
-                { color: '#f43f5e', shape: 'diamond', symbol: '🍬' },
-                { color: '#06b6d4', shape: 'star', symbol: '🍭' },
-                { color: '#f59e0b', shape: 'circle', symbol: '🍫' },
-                { color: '#10b981', shape: 'hexagon', symbol: '🍩' }
+                { color: '#06b6d4', shape: 'diamond', symbol: '❄️' },
+                { color: '#3b82f6', shape: 'star', symbol: '💎' },
+                { color: '#8b5cf6', shape: 'circle', symbol: '🔮' },
+                { color: '#ec4899', shape: 'hexagon', symbol: '⭐' }
             ]
         };
     }
@@ -103,22 +103,23 @@ function applyThemeVisuals() {
 }
 
 function getGridSizeForLevel(lvl) {
-    if (lvl === 1 || lvl === 2) return 6;
-    if (lvl === 3 || lvl === 4) return 7;
-    if (lvl === 5 || lvl === 6) return 8;
-    return Math.min(9, 6 + Math.floor((lvl - 1) / 2));
+    if (lvl <= 2) return 6;
+    if (lvl <= 4) return 7;
+    if (lvl <= 6) return 8;
+    return 9; // Niveaux avancés : grille maximale 9x9
 }
 
 let GRID_SIZE = getGridSizeForLevel(currentLevel);
 let TILE_SIZE = canvas.width / GRID_SIZE;
 let grid = [];
+let iceGrid = []; // Matrice des obstacles de glace (niveau >= 7)
 
 function getLevelConfig(lvl) {
-    let baseTarget = 450 + (lvl - 1) * 280 + Math.floor(Math.pow(lvl, 1.15) * 80);
+    let baseTarget = 450 + (lvl - 1) * 320 + Math.floor(Math.pow(lvl, 1.2) * 90);
     baseTarget = Math.round(baseTarget / 50) * 50;
     return {
         target: baseTarget,
-        moves: 18,
+        moves: Math.max(12, 18 - Math.floor(lvl / 3)),
         name: `Niv. ${lvl}`
     };
 }
@@ -221,10 +222,10 @@ puShuffleBtn.addEventListener('click', () => {
     activePowerup = null;
     puHammerBtn.classList.remove('active');
     playSound('bonus');
-    shuffleGraph();
+    shuffleGrid();
 });
 
-function shuffleGraph() {
+function shuffleGrid() {
     isAnimating = true;
     addFloatingText("🔀 MÉLANGE !", canvas.width / 2, canvas.height / 2, '#38bdf8');
     setTimeout(() => {
@@ -285,13 +286,11 @@ function saveProgress() {
 
 window.addEventListener('beforeunload', () => { saveProgress(); });
 
-// 🌐 Gestionnaire officiel des Publicités SDK (Poki / Web Standard Wrapper)
 function requestAd(type, onComplete) {
     let previousState = gameState;
     gameState = 'AD_LOADING';
     stopBackgroundMusic();
 
-    // Intégration officielle SDK Poki si présent sur le portail
     if (window.PokiSDK) {
         if (type === 'reward') {
             window.PokiSDK.rewardedBreak().then((success) => {
@@ -309,7 +308,6 @@ function requestAd(type, onComplete) {
         return;
     }
 
-    // Mode secours (Simulation web locale / GitHub Pages)
     let adOverlay = document.createElement('div');
     adOverlay.id = 'ad-simulation-overlay';
     adOverlay.style.position = 'absolute';
@@ -662,6 +660,17 @@ function drawGem(r, c, typeIdx) {
     }
 
     ctx.restore();
+
+    // Rendu des obstacles de glace pour les niveaux avancés (>= 7)
+    if (iceGrid && iceGrid[r] && iceGrid[r][c]) {
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.45)';
+        ctx.strokeStyle = '#e0f2fe';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4, 6);
+        ctx.fill();
+        ctx.stroke();
+    }
 }
 
 function startGame() {
@@ -703,10 +712,14 @@ function loadLevel() {
 
 function initGrid() {
     grid = [];
+    iceGrid = [];
     for (let r = 0; r < GRID_SIZE; r++) {
         grid[r] = [];
+        iceGrid[r] = [];
         for (let c = 0; c < GRID_SIZE; c++) {
             grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
+            // Ajout aléatoire d'obstacles de glace à partir du niveau 7
+            iceGrid[r][c] = (currentLevel >= 7 && Math.random() < 0.25);
         }
     }
 }
@@ -1154,6 +1167,7 @@ function useHammer(r, c) {
         createParticles(px, py, GEM_TYPES[val].color);
     }
     grid[r][c] = null;
+    if (iceGrid[r]) iceGrid[r][c] = false; // Casser la glace avec le marteau
     shakeTime = 10;
     comboMultiplier = 1;
     addFloatingText("🔨 CASSE !", px, py, '#34d399');
@@ -1174,6 +1188,15 @@ function useHammer(r, c) {
 }
 
 function swapAndCheck(r1, c1, r2, c2) {
+    // Interdiction d'échanger directement un bloc sous glace figée
+    if (iceGrid[r1][c1] || iceGrid[r2][c2]) {
+        isAnimating = false;
+        selectedTile = null;
+        playSound('gameover');
+        addFloatingText("❄️ GLACÉ !", (c1+c2)*TILE_SIZE/2 + TILE_SIZE/2, (r1+r2)*TILE_SIZE/2 + TILE_SIZE/2, '#38bdf8');
+        return;
+    }
+
     let temp = grid[r1][c1];
     grid[r1][c1] = grid[r2][c2];
     grid[r2][c2] = temp;
@@ -1201,18 +1224,18 @@ function findMatches() {
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE - 2; c++) {
             let val = grid[r][c];
-            if (val !== null && val === grid[r][c+1] && val === grid[r][c+2]) {
+            if (val !== null && !iceGrid[r][c] && val === grid[r][c+1] && !iceGrid[r][c+1] && val === grid[r][c+2] && !iceGrid[r][c+2]) {
                 matchedSet.add(`${r},${c}`); matchedSet.add(`${r},${c+1}`); matchedSet.add(`${r},${c+2}`);
-                if (c < GRID_SIZE - 3 && val === grid[r][c+3]) matchedSet.add(`${r},${c+3}`);
+                if (c < GRID_SIZE - 3 && val === grid[r][c+3] && !iceGrid[r][c+3]) matchedSet.add(`${r},${c+3}`);
             }
         }
     }
     for (let r = 0; r < GRID_SIZE - 2; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             let val = grid[r][c];
-            if (val !== null && val === grid[r+1][c] && val === grid[r+2][c]) {
+            if (val !== null && !iceGrid[r][c] && val === grid[r+1][c] && !iceGrid[r+1][c] && val === grid[r+2][c] && !iceGrid[r+2][c]) {
                 matchedSet.add(`${r},${c}`); matchedSet.add(`${r+1},${c}`); matchedSet.add(`${r+2},${c}`);
-                if (r < GRID_SIZE - 3 && val === grid[r+3][c]) matchedSet.add(`${r+3},${c}`);
+                if (r < GRID_SIZE - 3 && val === grid[r+3][c] && !iceGrid[r+3][c]) matchedSet.add(`${r+3},${c}`);
             }
         }
     }
@@ -1255,6 +1278,18 @@ function processMatches(matches, isChain) {
             createParticles(px, py, GEM_TYPES[val].color);
         }
         grid[m.r][m.c] = null;
+
+        // Casser la glace adjacente ou sur la case matchée
+        if (iceGrid[m.r]) iceGrid[m.r][m.c] = false;
+        
+        // Briser aussi la glace des cases directement adjacentes
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        dirs.forEach(([dr, dc]) => {
+            let nr = m.r + dr, nc = m.c + dc;
+            if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+                if (iceGrid[nr]) iceGrid[nr][nc] = false;
+            }
+        });
     });
 
     avgX /= matches.length;
@@ -1282,15 +1317,20 @@ function applyGravity() {
     for (let c = 0; c < GRID_SIZE; c++) {
         let writeRow = GRID_SIZE - 1;
         for (let r = GRID_SIZE - 1; r >= 0; r--) {
-            if (grid[r][c] !== null) {
+            // Ne fait pas tomber les blocs figés sous la glace
+            if (grid[r][c] !== null && !iceGrid[r][c]) {
                 let temp = grid[r][c];
                 grid[r][c] = null;
                 grid[writeRow][c] = temp;
                 writeRow--;
+            } else if (iceGrid[r][c]) {
+                writeRow = r - 1; // Bloque la chute au niveau de la glace
             }
         }
         for (let r = writeRow; r >= 0; r--) {
-            grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
+            if (!iceGrid[r][c]) {
+                grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
+            }
         }
     }
 }
@@ -1330,7 +1370,7 @@ function checkGameStatus() {
     }
 }
 
-// Initialisation au chargement avec initialisation SDK Poki optionnelle
+// Initialisation au chargement
 if (window.PokiSDK) {
     window.PokiSDK.init().then(() => {
         window.PokiSDK.gameLoadingFinished();
