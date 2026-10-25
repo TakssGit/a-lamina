@@ -1,8 +1,9 @@
-// a-lamina - Logique avec effets visuels (particules) et son dynamique (Web Audio API)
+// a-lamina - Système de Niveaux Progressifs et Menus Dynamiques
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const movesEl = document.getElementById('moves');
+const levelInfoEl = document.getElementById('level-info');
 
 const GRID_SIZE = 6;
 const TILE_SIZE = canvas.width / GRID_SIZE;
@@ -10,15 +11,25 @@ const COLORS = ['#f43f5e', '#38bdf8', '#fbbf24', '#34d399']; // Rouge, Bleu, Jau
 
 let grid = [];
 let score = 0;
-let targetScore = 500;
-let movesLeft = 15;
+let currentLevel = 1;
+
+// Configuration des niveaux
+let levelConfig = {
+    1: { target: 500, moves: 15, name: "Niveau 1 : Alignez 3 blocs" },
+    2: { target: 800, moves: 14, name: "Niveau 2 : Défi Stratégique" },
+    3: { target: 1200, moves: 12, name: "Niveau 3 : Maître Lamina" }
+};
+
+let targetScore = levelConfig[currentLevel].target;
+let movesLeft = levelConfig[currentLevel].moves;
+
 let selectedTile = null;
 let isAnimating = false;
-let particles = []; // Tableau pour gérer les effets visuels de particules
+let gameState = 'PLAYING'; // 'PLAYING', 'VICTORY', 'GAMEOVER'
+let particles = [];
 
-// --- SYSTÈME AUDIO (Web Audio API - Aucun fichier externe requis) ---
+// --- SYSTÈME AUDIO (Web Audio API) ---
 let audioCtx = null;
-
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -29,46 +40,39 @@ function playSound(type) {
     try {
         initAudio();
         if (!audioCtx) return;
-        
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-
         let now = audioCtx.currentTime;
 
         if (type === 'select') {
             osc.frequency.setValueAtTime(400, now);
             gain.gain.setValueAtTime(0.1, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-            osc.start(now);
-            osc.stop(now + 0.1);
+            osc.start(now); osc.stop(now + 0.1);
         } else if (type === 'swap') {
             osc.frequency.setValueAtTime(300, now);
             osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
             gain.gain.setValueAtTime(0.1, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-            osc.start(now);
-            osc.stop(now + 0.15);
+            osc.start(now); osc.stop(now + 0.15);
         } else if (type === 'match') {
             osc.frequency.setValueAtTime(500, now);
             osc.frequency.setValueAtTime(800, now + 0.1);
             gain.gain.setValueAtTime(0.15, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-            osc.start(now);
-            osc.stop(now + 0.3);
+            osc.start(now); osc.stop(now + 0.3);
         } else if (type === 'win') {
-            let notes = [523.25, 659.25, 783.99, 1046.50]; // Accord triomphant
+            let notes = [523.25, 659.25, 783.99, 1046.50];
             notes.forEach((freq, index) => {
                 let o = audioCtx.createOscillator();
                 let g = audioCtx.createGain();
-                o.connect(g);
-                g.connect(audioCtx.destination);
+                o.connect(g); g.connect(audioCtx.destination);
                 o.frequency.setValueAtTime(freq, now + index * 0.1);
                 g.gain.setValueAtTime(0.15, now + index * 0.1);
                 g.gain.exponentialRampToValueAtTime(0.01, now + index * 0.1 + 0.3);
-                o.start(now + index * 0.1);
-                o.stop(now + index * 0.1 + 0.3);
+                o.start(now + index * 0.1); o.stop(now + index * 0.1 + 0.3);
             });
         } else if (type === 'gameover') {
             osc.type = 'sawtooth';
@@ -76,25 +80,20 @@ function playSound(type) {
             osc.frequency.linearRampToValueAtTime(80, now + 0.4);
             gain.gain.setValueAtTime(0.15, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-            osc.start(now);
-            osc.stop(now + 0.4);
+            osc.start(now); osc.stop(now + 0.4);
         }
-    } catch (e) {
-        // Sécurité si l'interaction utilisateur bloque l'audio
-    }
+    } catch (e) {}
 }
 
-// --- SYSTÈME DE PARTICULES VISUELLES ---
+// --- PARTICULES ---
 function createParticles(pixelX, pixelY, color) {
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 10; i++) {
         particles.push({
-            x: pixelX,
-            y: pixelY,
+            x: pixelX, y: pixelY,
             vx: (Math.random() - 0.5) * 6,
             vy: (Math.random() - 0.5) * 6,
-            size: Math.random() * 5 + 3,
-            color: color,
-            alpha: 1
+            size: Math.random() * 4 + 2,
+            color: color, alpha: 1
         });
     }
 }
@@ -102,10 +101,7 @@ function createParticles(pixelX, pixelY, color) {
 function updateAndDrawParticles() {
     for (let i = particles.length - 1; i >= 0; i--) {
         let p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.alpha -= 0.03;
-
+        p.x += p.vx; p.y += p.vy; p.alpha -= 0.04;
         if (p.alpha <= 0) {
             particles.splice(i, 1);
         } else {
@@ -121,6 +117,20 @@ function updateAndDrawParticles() {
 }
 
 // --- LOGIQUE DU JEU ---
+function loadLevel() {
+    let config = levelConfig[currentLevel] || levelConfig[3];
+    targetScore = config.target;
+    movesLeft = config.moves;
+    score = 0;
+    scoreEl.textContent = score;
+    document.getElementById('target-score').textContent = targetScore;
+    movesEl.textContent = movesLeft;
+    levelInfoEl.textContent = config.name;
+    gameState = 'PLAYING';
+    initGrid();
+    draw();
+}
+
 function initGrid() {
     do {
         for (let r = 0; r < GRID_SIZE; r++) {
@@ -145,7 +155,7 @@ function checkInitialMatches() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Dessin de la grille
+    // Dessin des blocs
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             const val = grid[r][c];
@@ -153,12 +163,10 @@ function draw() {
                 ctx.fillStyle = COLORS[val];
                 ctx.fillRect(c * TILE_SIZE + 6, r * TILE_SIZE + 6, TILE_SIZE - 12, TILE_SIZE - 12);
 
-                // Effet brillant
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.fillRect(c * TILE_SIZE + 10, r * TILE_SIZE + 10, TILE_SIZE - 20, 6);
             }
             
-            // Surbrillance du bloc sélectionné
             if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 4;
@@ -167,17 +175,51 @@ function draw() {
         }
     }
 
-    // Dessin des particules par-dessus
     updateAndDrawParticles();
 
-    // Boucle d'animation fluide si des particules sont actives
-    if (particles.length > 0) {
+    // Affichage des menus de fin de partie directement sur le Canvas
+    if (gameState === 'VICTORY') {
+        drawOverlay("VICTOIRE !", "#34d399", currentLevel < 3 ? "Cliquez pour le Niveau Suivant" : "Jeu Terminé ! Félicitations !");
+    } else if (gameState === 'GAMEOVER') {
+        drawOverlay("RATÉ !", "#f43f5e", "Cliquez pour Recommencer");
+    }
+
+    if (particles.length > 0 || gameState !== 'PLAYING') {
         requestAnimationFrame(draw);
     }
 }
 
+function drawOverlay(title, color, subtitle) {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = color;
+    ctx.font = 'bold 36px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 20);
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '16px Segoe UI';
+    ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 25);
+}
+
 canvas.addEventListener('pointerdown', (e) => {
-    if (isAnimating || movesLeft <= 0) return;
+    if (gameState === 'VICTORY') {
+        if (currentLevel < 3) {
+            currentLevel++;
+            loadLevel();
+        } else {
+            currentLevel = 1;
+            loadLevel();
+        }
+        return;
+    }
+    if (gameState === 'GAMEOVER') {
+        loadLevel();
+        return;
+    }
+
+    if (isAnimating || movesLeft <= 0 || gameState !== 'PLAYING') return;
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -219,7 +261,6 @@ function swapAndCheck(r1, c1, r2, c2) {
             playSound('match');
             processMatches(matches);
         } else {
-            // Annuler si pas de match
             temp = grid[r1][c1];
             grid[r1][c1] = grid[r2][c2];
             grid[r2][c2] = temp;
@@ -231,25 +272,19 @@ function swapAndCheck(r1, c1, r2, c2) {
 
 function findMatches() {
     let matchedSet = new Set();
-
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE - 2; c++) {
             let val = grid[r][c];
             if (val !== null && val === grid[r][c+1] && val === grid[r][c+2]) {
-                matchedSet.add(`${r},${c}`);
-                matchedSet.add(`${r},${c+1}`);
-                matchedSet.add(`${r},${c+2}`);
+                matchedSet.add(`${r},${c}`); matchedSet.add(`${r},${c+1}`); matchedSet.add(`${r},${c+2}`);
             }
         }
     }
-
     for (let r = 0; r < GRID_SIZE - 2; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             let val = grid[r][c];
             if (val !== null && val === grid[r+1][c] && val === grid[r+2][c]) {
-                matchedSet.add(`${r},${c}`);
-                matchedSet.add(`${r+1},${c}`);
-                matchedSet.add(`${r+2},${c}`);
+                matchedSet.add(`${r},${c}`); matchedSet.add(`${r+1},${c}`); matchedSet.add(`${r+2},${c}`);
             }
         }
     }
@@ -263,13 +298,10 @@ function processMatches(matches) {
     score += matches.length * 50;
     scoreEl.textContent = score;
 
-    // Déclencher les particules sur chaque bloc détruit
     matches.forEach(m => {
         let val = grid[m.r][m.c];
         if (val !== null) {
-            let pixelX = m.c * TILE_SIZE + TILE_SIZE / 2;
-            let pixelY = m.r * TILE_SIZE + TILE_SIZE / 2;
-            createParticles(pixelX, pixelY, COLORS[val]);
+            createParticles(m.c * TILE_SIZE + TILE_SIZE / 2, m.r * TILE_SIZE + TILE_SIZE / 2, COLORS[val]);
         }
         grid[m.r][m.c] = null;
     });
@@ -310,28 +342,15 @@ function applyGravity() {
 
 function checkGameStatus() {
     if (score >= targetScore) {
-        setTimeout(() => {
-            playSound('win');
-            alert("Bravo ! Niveau 1 réussi avec brio !");
-            resetGame();
-        }, 100);
+        gameState = 'VICTORY';
+        playSound('win');
+        draw();
     } else if (movesLeft <= 0) {
-        setTimeout(() => {
-            playSound('gameover');
-            alert("Partie terminée ! Plus de coups disponibles.");
-            resetGame();
-        }, 100);
+        gameState = 'GAMEOVER';
+        playSound('gameover');
+        draw();
     }
 }
 
-function resetGame() {
-    score = 0;
-    movesLeft = 15;
-    scoreEl.textContent = score;
-    movesEl.textContent = movesLeft;
-    initGrid();
-    draw();
-}
-
-initGrid();
-draw();
+// Lancement du jeu
+loadLevel();
