@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>A-LAMINA - Match 3 Gem Edition</title>
+    <title>a-Lamina - L'Aventure des Cristaux Magiques</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background-color: #0f172a;
+            background: radial-gradient(circle, #311052 0%, #15082e 70%, #0a0314 100%);
             color: #f8fafc;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
@@ -16,102 +16,178 @@
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
-            touch-action: none;
+            /* Curseur standard ultra-visible sur tous les fonds colorés */
+            cursor: pointer;
         }
+
         #game-container {
             text-align: center;
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 16px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-            border: 2px solid #334155;
+            background: linear-gradient(180deg, #4c1d95 0%, #2e1065 100%);
+            padding: 18px;
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(244, 114, 182, 0.3);
+            border: 5px solid #f472b6;
             position: relative;
             max-width: 440px;
             width: 100%;
         }
+
         .header-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
+
         h1 {
-            color: #f43f5e;
-            letter-spacing: 2px;
-            font-size: 1.6rem;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            color: #fef08a;
+            letter-spacing: 1.5px;
+            font-size: 1.7rem;
+            text-shadow: 0 3px 6px rgba(0,0,0,0.8), 0 0 10px #f472b6;
         }
+
         .header-buttons {
             display: flex;
-            gap: 6px;
+            gap: 8px;
         }
-        .btn-ui {
-            background: #334155;
-            color: #f8fafc;
-            border: none;
-            padding: 6px 10px;
-            border-radius: 6px;
+
+        .btn-icon {
+            background: linear-gradient(180deg, #f472b6 0%, #db2777 100%);
+            color: #ffffff;
+            border: 3px solid #fef08a;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
             cursor: pointer;
-            font-weight: bold;
-            font-size: 0.85rem;
-            transition: background 0.2s;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 5px 0 #831843, 0 8px 12px rgba(0,0,0,0.5);
+            transition: transform 0.08s ease, box-shadow 0.08s ease;
         }
-        .btn-ui:hover { background: #475569; }
+        .btn-icon:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #831843, 0 3px 6px rgba(0,0,0,0.4);
+        }
+
         #level-info {
-            font-size: 0.85rem;
-            color: #94a3b8;
-            margin-bottom: 10px;
+            font-size: 1.1rem;
+            color: #fef08a;
+            margin-bottom: 8px;
             text-align: left;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
+
         .hud {
             display: flex;
             justify-content: space-around;
             margin-bottom: 12px;
             font-size: 0.9rem;
-            background: #0f172a;
-            padding: 8px;
-            border-radius: 8px;
-            gap: 10px;
+            background: linear-gradient(180deg, #78350f 0%, #451a03 100%);
+            padding: 10px;
+            border-radius: 16px;
+            border: 3px solid #fcd34d;
+            gap: 5px;
+            box-shadow: inset 0 3px 6px rgba(0,0,0,0.7), 0 4px 8px rgba(0,0,0,0.4);
+        }
+        .hud div {
+            color: #fef08a;
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.9);
         }
         .hud span {
             color: #38bdf8;
             font-weight: bold;
         }
+
         canvas {
-            background-color: #0f172a;
-            border: 3px solid #475569;
-            border-radius: 8px;
+            background-color: #0f051d;
+            border: 4px solid #fcd34d;
+            border-radius: 20px;
             touch-action: none;
             cursor: pointer;
             width: 100%;
             height: auto;
             max-width: 380px;
             max-height: 380px;
+            box-shadow: inset 0 0 25px rgba(0,0,0,0.9), 0 0 15px rgba(252, 211, 77, 0.3);
         }
+
         .instructions {
-            margin-top: 12px;
-            font-size: 0.8rem;
-            color: #cbd5e1;
+            margin-top: 10px;
+            font-size: 0.95rem;
+            color: #fef08a;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+            background: rgba(255, 255, 255, 0.12);
+            padding: 8px;
+            border-radius: 14px;
+            border: 2px dashed #f472b6;
         }
+
+        #settings-modal {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 3, 28, 0.96);
+            border-radius: 30px;
+            z-index: 100;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+            padding: 20px;
+            border: 4px solid #f472b6;
+        }
+        #settings-modal h2 { color: #fef08a; font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+        .modal-btn {
+            background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+            color: white; border: 3px solid #bae6fd;
+            padding: 12px 20px; border-radius: 16px; font-weight: bold; font-size: 1.05rem;
+            cursor: pointer; box-shadow: 0 5px 0 #0369a1, 0 8px 12px rgba(0,0,0,0.4);
+            width: 85%;
+        }
+        .modal-btn.danger {
+            background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
+            border-color: #fecdd3;
+            box-shadow: 0 5px 0 #9f1239, 0 8px 12px rgba(0,0,0,0.4);
+        }
+        .modal-btn.warning {
+            background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+            border-color: #fde68a;
+            box-shadow: 0 5px 0 #b45309, 0 8px 12px rgba(0,0,0,0.4);
+        }
+        .modal-btn:active { transform: translateY(4px); box-shadow: none; }
     </style>
 </head>
 <body>
     <div id="game-container">
         <div class="header-top">
-            <h1>A-LAMINA</h1>
+            <h1>✨ a-Lamina</h1>
             <div class="header-buttons">
-                <button id="mute-btn" class="btn-ui">🔊</button>
-                <button id="pause-btn" class="btn-ui">PAUSE</button>
+                <button id="settings-btn" class="btn-icon" title="Paramètres">⚙️</button>
+                <button id="pause-btn" class="btn-icon" title="Pause">⏸️</button>
             </div>
         </div>
-        <div id="level-info">Menu Principal</div>
+        <div id="level-info">Niveau 1</div>
         <div class="hud">
-            <div>Score : <span id="score">0</span> / <span id="target-score">500</span></div>
+            <div>Score : <span id="score">0</span> / <span id="target-score">600</span></div>
             <div>Top : <span id="high-score">0</span></div>
             <div>Coups : <span id="moves">15</span></div>
         </div>
         <canvas id="gameCanvas" width="400" height="400"></canvas>
-        <div class="instructions">Alignez 3 gemmes identiques pour déclencher des combos !</div>
+        <div class="instructions">⭐ Aligne 3 cristaux magiques ou plus ! ⭐</div>
+
+        <div id="settings-modal">
+            <h2>⚙️ Paramètres Magiques</h2>
+            <button id="modal-sound" class="modal-btn">🔊 Bruitages : ACTIVÉS</button>
+            <button id="modal-music" class="modal-btn">🎶 Musique : ACTIVÉE</button>
+            <button id="modal-refresh" class="modal-btn warning">🔄 Actualiser la Partie</button>
+            <button id="modal-reset" class="modal-btn danger">⚠️ Recommencer au Niveau 1</button>
+            <button id="modal-close" class="modal-btn" style="background: linear-gradient(180deg, #64748b 0%, #334155 100%); border-color: #cbd5e1; box-shadow: 0 5px 0 #1e293b;">❌ Fermer</button>
+        </div>
     </div>
 
     <script src="src/game.js"></script>
