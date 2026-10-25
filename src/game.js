@@ -1,4 +1,4 @@
-// a-Lamina - Moteur Match-3 Équilibré & Indice Actif
+// a-Lamina - Moteur Match-3 Complet avec Musique Menu & Indice 3s Fluide
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -38,14 +38,10 @@ const GEM_TYPES = [
 
 let grid = [];
 
-// Formule de score équilibrée (Standard Candy Crush / Match-3 casual)
 function getLevelConfig(lvl) {
-    // Objectif de score progressif et réaliste pour une durée moyenne de jeu de 1 à 2 minutes
     let baseTarget = 1200 + (lvl - 1) * 800 + Math.floor(Math.pow(lvl, 1.25) * 200);
-    baseTarget = Math.round(baseTarget / 100) * 100; // Arrondi propre
-
-    let defaultMoves = 18; // Nombre de coups standard par niveau
-
+    baseTarget = Math.round(baseTarget / 100) * 100;
+    let defaultMoves = 18;
     return {
         target: baseTarget,
         moves: defaultMoves,
@@ -66,7 +62,7 @@ let floatingTexts = [];
 let backgroundGems = [];
 let shakeTime = 0;
 
-// Système d'indice / suggestion automatique (3 secondes)
+// Indice / Suggestion (3 secondes d'inactivité, clignotement ralenti)
 let idleTimer = null;
 let suggestedMove = null;
 let hintPulseTimer = 0;
@@ -75,7 +71,6 @@ let soundMuted = false;
 let musicMuted = false;
 let backgroundMusicInterval = null;
 
-// Cristaux d'arrière-plan animés
 for (let i = 0; i < 12; i++) {
     backgroundGems.push({
         x: Math.random() * canvas.width,
@@ -90,17 +85,16 @@ for (let i = 0; i < 12; i++) {
 function resetIdleTimer() {
     clearTimeout(idleTimer);
     suggestedMove = null;
-    if (gameState === 'PLAYING') {
-        idleTimer = setTimeout(() => {
-            findPossibleMove();
-        }, 3000); // 3 secondes d'inactivité
-    }
+    // Actif en cours de jeu ET sur l'écran d'accueil/menu
+    idleTimer = setTimeout(() => {
+        findPossibleMove();
+    }, 3000);
 }
 
 function findPossibleMove() {
+    if (grid.length === 0) return;
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
-            // Test échange horizontal
             if (c < GRID_SIZE - 1) {
                 swapInGrid(r, c, r, c + 1);
                 if (findMatches().length > 0) {
@@ -110,7 +104,6 @@ function findPossibleMove() {
                 }
                 swapInGrid(r, c, r, c + 1);
             }
-            // Test échange vertical
             if (r < GRID_SIZE - 1) {
                 swapInGrid(r, c, r + 1, c);
                 if (findMatches().length > 0) {
@@ -508,7 +501,6 @@ function startGame() {
     score = 0;
     let config = getLevelConfig(currentLevel);
     movesLeft = config.moves;
-    startBackgroundMusic();
     loadLevel();
 }
 
@@ -566,7 +558,8 @@ function draw() {
         shakeTime--;
     }
 
-    hintPulseTimer += 0.08;
+    // Clignotement ralenti pour les indices (vitesse divisée par 3)
+    hintPulseTimer += 0.03;
 
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
@@ -588,11 +581,11 @@ function draw() {
                 ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
             }
 
-            // Indice automatique (Scintillement après 3s d'inactivité)
-            if (suggestedMove && !selectedTile) {
+            // Indice automatique (Scintillement fluide et doux)
+            if (suggestedMove && !selectedTile && gameState === 'PLAYING') {
                 let isHintTile = suggestedMove.some(pos => pos.r === r && pos.c === c);
                 if (isHintTile) {
-                    let pulse = Math.abs(Math.sin(hintPulseTimer)) * 5 + 2;
+                    let pulse = Math.abs(Math.sin(hintPulseTimer)) * 4 + 2;
                     ctx.strokeStyle = '#fef08a';
                     ctx.lineWidth = pulse;
                     ctx.strokeRect(c * TILE_SIZE + 3, r * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
@@ -773,6 +766,10 @@ window.addEventListener('blur', () => {
 });
 
 canvas.addEventListener('pointerdown', (e) => {
+    // Permet d'autoriser l'activation audio du navigateur dès le premier clic sur l'écran d'accueil
+    initAudio();
+    startBackgroundMusic();
+
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -901,8 +898,6 @@ function findMatches() {
 
 function processMatches(matches) {
     let isBonus = matches.length >= 4;
-    
-    // Formule de score équilibrée standard (60 pts par cristal, 120 pts pour les super combos)
     let pointsGained = matches.length * (isBonus ? 120 : 60);
     
     score += pointsGained;
@@ -911,7 +906,7 @@ function processMatches(matches) {
 
     if (isBonus) {
         playSound('bonus');
-        launchFireworks(); // Feux d'artifice spectaculaires pour les super combos !
+        launchFireworks();
     } else {
         playSound('match');
     }
@@ -986,7 +981,7 @@ function checkGameStatus() {
         clearTimeout(idleTimer);
         stopBackgroundMusic();
         playSound('win');
-        launchFireworks(); // Feux d'artifice de victoire !
+        launchFireworks();
         draw();
     } else if (movesLeft <= 0) {
         gameState = 'GAMEOVER';
@@ -997,7 +992,7 @@ function checkGameStatus() {
     }
 }
 
-// Initialisation au chargement
+// Initialisation au chargement de l'application sur le Menu
 if (window.PokiSDK) window.PokiSDK.gameLoadingFinished();
 score = 0;
 GRID_SIZE = getGridSizeForLevel(currentLevel);
@@ -1010,4 +1005,6 @@ movesEl.textContent = config.moves;
 highScoreEl.textContent = highScore;
 initGrid();
 gameState = 'MENU';
+startBackgroundMusic(); // Lancement de la musique dès l'accueil
+resetIdleTimer();
 draw();
