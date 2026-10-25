@@ -1,4 +1,4 @@
-// a-Lamina - Moteur Match-3 Complet avec Musique Menu & Indice 3s Fluide
+// a-Lamina - Moteur Corrigé (Sans boucle infinie)
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -14,9 +14,11 @@ const modalRefresh = document.getElementById('modal-refresh');
 const modalReset = document.getElementById('modal-reset');
 const modalClose = document.getElementById('modal-close');
 
+const puHammerBtn = document.getElementById('pu-hammer');
+const puShuffleBtn = document.getElementById('pu-shuffle');
+
 let currentLevel = parseInt(localStorage.getItem('alamina_level')) || 1;
 let highScore = parseInt(localStorage.getItem('alamina_highscore')) || 0;
-
 let score = 0;
 
 function getGridSizeForLevel(lvl) {
@@ -39,12 +41,11 @@ const GEM_TYPES = [
 let grid = [];
 
 function getLevelConfig(lvl) {
-    let baseTarget = 1200 + (lvl - 1) * 800 + Math.floor(Math.pow(lvl, 1.25) * 200);
-    baseTarget = Math.round(baseTarget / 100) * 100;
-    let defaultMoves = 18;
+    let baseTarget = 500 + (lvl - 1) * 350 + Math.floor(Math.pow(lvl, 1.25) * 100);
+    baseTarget = Math.round(baseTarget / 50) * 50;
     return {
         target: baseTarget,
-        moves: defaultMoves,
+        moves: 18,
         name: `Niveau ${lvl}`
     };
 }
@@ -62,7 +63,7 @@ let floatingTexts = [];
 let backgroundGems = [];
 let shakeTime = 0;
 
-// Indice / Suggestion (3 secondes d'inactivité, clignotement ralenti)
+let activePowerup = null;
 let idleTimer = null;
 let suggestedMove = null;
 let hintPulseTimer = 0;
@@ -85,14 +86,13 @@ for (let i = 0; i < 12; i++) {
 function resetIdleTimer() {
     clearTimeout(idleTimer);
     suggestedMove = null;
-    // Actif en cours de jeu ET sur l'écran d'accueil/menu
     idleTimer = setTimeout(() => {
         findPossibleMove();
     }, 3000);
 }
 
 function findPossibleMove() {
-    if (grid.length === 0) return;
+    if (!grid || grid.length === 0) return;
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             if (c < GRID_SIZE - 1) {
@@ -121,6 +121,36 @@ function swapInGrid(r1, c1, r2, c2) {
     let temp = grid[r1][c1];
     grid[r1][c1] = grid[r2][c2];
     grid[r2][c2] = temp;
+}
+
+puHammerBtn.addEventListener('click', () => {
+    if (gameState !== 'PLAYING' || isAnimating) return;
+    activePowerup = activePowerup === 'hammer' ? null : 'hammer';
+    puHammerBtn.classList.toggle('active', activePowerup === 'hammer');
+    playSound('select');
+    selectedTile = null;
+});
+
+puShuffleBtn.addEventListener('click', () => {
+    if (gameState !== 'PLAYING' || isAnimating) return;
+    activePowerup = null;
+    puHammerBtn.classList.remove('active');
+    playSound('bonus');
+    shuffleGrid();
+});
+
+function shuffleGrid() {
+    isAnimating = true;
+    addFloatingText("🔀 MÉLANGE !", canvas.width / 2, canvas.height / 2, '#38bdf8');
+    setTimeout(() => {
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
+            }
+        }
+        isAnimating = false;
+        resetIdleTimer();
+    }, 400);
 }
 
 function startBackgroundMusic() {
@@ -163,9 +193,7 @@ function saveProgress() {
     localStorage.setItem('alamina_highscore', highScore);
 }
 
-window.addEventListener('beforeunload', () => {
-    saveProgress();
-});
+window.addEventListener('beforeunload', () => { saveProgress(); });
 
 function requestAd(type, onComplete) {
     let previousState = gameState;
@@ -470,7 +498,7 @@ function drawGem(r, c, typeIdx) {
         ctx.closePath(); ctx.fill(); ctx.stroke();
     } else if (gem.shape === 'rhombus') {
         ctx.beginPath();
-        ctx.roundRect(-size*0.8, -size*0.8, size*1.6, size*1.6, 6);
+        ctx.rect(-size*0.8, -size*0.8, size*1.6, size*1.6);
         ctx.fill(); ctx.stroke();
     } else if (gem.shape === 'circle') {
         ctx.beginPath();
@@ -501,6 +529,8 @@ function startGame() {
     score = 0;
     let config = getLevelConfig(currentLevel);
     movesLeft = config.moves;
+    activePowerup = null;
+    puHammerBtn.classList.remove('active');
     loadLevel();
 }
 
@@ -527,26 +557,15 @@ function loadLevel() {
 
 function initGrid() {
     grid = [];
-    do {
-        for (let r = 0; r < GRID_SIZE; r++) {
-            grid[r] = [];
-            for (let c = 0; c < GRID_SIZE; c++) {
-                grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
-            }
-        }
-    } while (checkInitialMatches());
-}
-
-function checkInitialMatches() {
     for (let r = 0; r < GRID_SIZE; r++) {
+        grid[r] = [];
         for (let c = 0; c < GRID_SIZE; c++) {
-            if (c < GRID_SIZE - 2 && grid[r][c] === grid[r][c+1] && grid[r][c] === grid[r][c+2]) return true;
-            if (r < GRID_SIZE - 2 && grid[r][c] === grid[r+1][c] && grid[r][c] === grid[r+2][c]) return true;
+            grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
         }
     }
-    return false;
 }
 
+// Boucle de rendu principale (draw)
 function draw() {
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -558,37 +577,37 @@ function draw() {
         shakeTime--;
     }
 
-    // Clignotement ralenti pour les indices (vitesse divisée par 3)
     hintPulseTimer += 0.03;
 
-    for (let r = 0; r < GRID_SIZE; r++) {
-        for (let c = 0; c < GRID_SIZE; c++) {
-            ctx.strokeStyle = 'rgba(252, 211, 77, 0.15)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    if (grid && grid.length > 0) {
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                ctx.strokeStyle = 'rgba(252, 211, 77, 0.15)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
 
-            const val = grid[r][c];
-            if (val !== null && val !== undefined) {
-                drawGem(r, c, val);
-            }
-            
-            if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 5;
-                ctx.strokeRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                ctx.strokeStyle = '#f472b6';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-            }
+                const val = grid[r][c];
+                if (val !== null && val !== undefined) {
+                    drawGem(r, c, val);
+                }
+                
+                if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
+                    ctx.strokeStyle = activePowerup === 'hammer' ? '#34d399' : '#ffffff';
+                    ctx.lineWidth = 5;
+                    ctx.strokeRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                    ctx.strokeStyle = '#f472b6';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                }
 
-            // Indice automatique (Scintillement fluide et doux)
-            if (suggestedMove && !selectedTile && gameState === 'PLAYING') {
-                let isHintTile = suggestedMove.some(pos => pos.r === r && pos.c === c);
-                if (isHintTile) {
-                    let pulse = Math.abs(Math.sin(hintPulseTimer)) * 4 + 2;
-                    ctx.strokeStyle = '#fef08a';
-                    ctx.lineWidth = pulse;
-                    ctx.strokeRect(c * TILE_SIZE + 3, r * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+                if (suggestedMove && !selectedTile && gameState === 'PLAYING' && !activePowerup) {
+                    let isHintTile = suggestedMove.some(pos => pos.r === r && pos.c === c);
+                    if (isHintTile) {
+                        let pulse = Math.abs(Math.sin(hintPulseTimer)) * 4 + 2;
+                        ctx.strokeStyle = '#fef08a';
+                        ctx.lineWidth = pulse;
+                        ctx.strokeRect(c * TILE_SIZE + 3, r * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+                    }
                 }
             }
         }
@@ -616,36 +635,35 @@ function drawMainMenuOverlay() {
 
     updateAndDrawEffects();
 
-    let boxX = 30; let boxY = 60; let boxW = canvas.width - 60; let boxH = 260;
+    let boxX = 30; let boxY = 50; let boxW = canvas.width - 60; let boxH = 260;
     ctx.fillStyle = 'rgba(76, 29, 149, 0.85)';
     ctx.strokeStyle = '#fcd34d';
     ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 24); ctx.fill(); ctx.stroke();
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
 
     ctx.fillStyle = '#fef08a';
-    ctx.font = 'bold 36px Segoe UI';
+    ctx.font = 'bold 34px Segoe UI';
     ctx.textAlign = 'center';
-    ctx.fillText("✨ a-Lamina ✨", canvas.width / 2, boxY + 55);
+    ctx.fillText("✨ a-Lamina ✨", canvas.width / 2, boxY + 50);
 
     ctx.fillStyle = '#f472b6';
     ctx.font = 'bold 18px Segoe UI';
-    ctx.fillText(`Aventure - Niveau ${currentLevel}`, canvas.width / 2, boxY + 100);
+    ctx.fillText(`Aventure - Niveau ${currentLevel}`, canvas.width / 2, boxY + 95);
 
     ctx.fillStyle = '#38bdf8';
     ctx.font = '15px Segoe UI';
-    ctx.fillText(`Objectif : 0 / ${targetScore} pts`, canvas.width / 2, boxY + 135);
+    ctx.fillText(`Objectif : 0 / ${targetScore} pts`, canvas.width / 2, boxY + 130);
 
     let btnX = canvas.width / 2 - 90;
-    let btnY = boxY + 175;
+    let btnY = boxY + 165;
     let btnW = 180;
     let btnH = 54;
 
     ctx.fillStyle = '#10b981';
-    ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 27); ctx.fill();
-    ctx.fillStyle = '#059669';
-    ctx.beginPath(); ctx.roundRect(btnX, btnY + 6, btnW, btnH - 6, 27); ctx.fill();
+    ctx.fillRect(btnX, btnY, btnW, btnH);
     ctx.fillStyle = '#34d399';
-    ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH - 6, 27); ctx.fill();
+    ctx.fillRect(btnX, btnY, btnW, btnH - 6);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 22px Segoe UI';
@@ -661,16 +679,17 @@ function drawVictoryProgressionOverlay() {
     ctx.fillStyle = '#fef08a';
     ctx.font = 'bold 32px Segoe UI';
     ctx.textAlign = 'center';
-    ctx.fillText("✨ NIVEAU RÉUSSI ! ✨", canvas.width / 2, 65);
+    ctx.fillText("✨ NIVEAU RÉUSSI ! ✨", canvas.width / 2, 60);
 
     ctx.font = '36px Segoe UI';
-    ctx.fillText("⭐ ⭐ ⭐", canvas.width / 2, 115);
+    ctx.fillText("⭐ ⭐ ⭐", canvas.width / 2, 110);
 
-    let boxX = 35; let boxY = 140; let boxW = canvas.width - 70; let boxH = 150;
+    let boxX = 35; let boxY = 130; let boxW = canvas.width - 70; let boxH = 150;
     ctx.fillStyle = 'rgba(76, 29, 149, 0.88)';
     ctx.strokeStyle = '#fcd34d';
     ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 20); ctx.fill(); ctx.stroke();
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
 
     ctx.fillStyle = '#fbcfe8';
     ctx.font = 'bold 17px Segoe UI';
@@ -683,15 +702,13 @@ function drawVictoryProgressionOverlay() {
     ctx.fillText(`Meilleur Record : ${highScore}`, canvas.width / 2, boxY + 115);
 
     let btnX = canvas.width / 2 - 110;
-    let btnY = 315;
+    let btnY = 300;
     let btnW = 220; let btnH = 50;
 
     ctx.fillStyle = '#10b981';
-    ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 25); ctx.fill();
-    ctx.fillStyle = '#059669';
-    ctx.beginPath(); ctx.roundRect(btnX, btnY + 5, btnW, btnH - 5, 25); ctx.fill();
+    ctx.fillRect(btnX, btnY, btnW, btnH);
     ctx.fillStyle = '#34d399';
-    ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH - 5, 25); ctx.fill();
+    ctx.fillRect(btnX, btnY, btnW, btnH - 5);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 18px Segoe UI';
@@ -716,13 +733,13 @@ function drawGameOverOverlay() {
     let btnW = 220; let btnH = 45;
 
     ctx.fillStyle = '#38bdf8';
-    ctx.beginPath(); ctx.roundRect(btn1X, btn1Y, btnW, btnH, 22); ctx.fill();
+    ctx.fillRect(btn1X, btn1Y, btnW, btnH);
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Segoe UI';
     ctx.fillText("📺 +5 Coups Magiques", canvas.width / 2, btn1Y + 28);
 
     let btn2Y = canvas.height / 2 + 65;
     ctx.fillStyle = '#ef4444';
-    ctx.beginPath(); ctx.roundRect(btn1X, btn2Y, btnW, btnH, 22); ctx.fill();
+    ctx.fillRect(btn1X, btn2Y, btnW, btnH);
     ctx.fillStyle = '#ffffff';
     ctx.fillText("🔄 Recommencer", canvas.width / 2, btn2Y + 28);
 }
@@ -746,12 +763,10 @@ function togglePause() {
         gameState = 'PAUSED';
         pauseBtn.textContent = "▶️";
         clearTimeout(idleTimer);
-        draw();
     } else if (gameState === 'PAUSED') {
         gameState = 'PLAYING';
         pauseBtn.textContent = "⏳";
         resetIdleTimer();
-        draw();
     }
 }
 
@@ -761,12 +776,10 @@ window.addEventListener('blur', () => {
         gameState = 'PAUSED';
         pauseBtn.textContent = "▶️";
         clearTimeout(idleTimer);
-        draw();
     }
 });
 
 canvas.addEventListener('pointerdown', (e) => {
-    // Permet d'autoriser l'activation audio du navigateur dès le premier clic sur l'écran d'accueil
     initAudio();
     startBackgroundMusic();
 
@@ -786,7 +799,7 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (gameState === 'VICTORY') {
         let btnX = canvas.width / 2 - 110;
-        let btnY = 315;
+        let btnY = 300;
         let btnW = 220; let btnH = 50;
 
         if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
@@ -811,7 +824,6 @@ canvas.addEventListener('pointerdown', (e) => {
                     movesEl.textContent = movesLeft;
                     gameState = 'PLAYING';
                     resetIdleTimer();
-                    draw();
                 }
             });
         } else if (x >= btn1X && x <= btn1X + btnW && y >= btn2Y && y <= btn2Y + btnH) {
@@ -828,6 +840,11 @@ canvas.addEventListener('pointerdown', (e) => {
     const r = Math.floor(y / TILE_SIZE);
     
     if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+        if (activePowerup === 'hammer') {
+            useHammer(r, c);
+            return;
+        }
+
         if (!selectedTile) {
             selectedTile = { r, c };
             playSound('select');
@@ -842,15 +859,44 @@ canvas.addEventListener('pointerdown', (e) => {
             }
             selectedTile = { r, c };
         }
-        draw();
     }
 });
+
+function useHammer(r, c) {
+    isAnimating = true;
+    activePowerup = null;
+    puHammerBtn.classList.remove('active');
+    playSound('bonus');
+
+    let val = grid[r][c];
+    let px = c * TILE_SIZE + TILE_SIZE / 2;
+    let py = r * TILE_SIZE + TILE_SIZE / 2;
+    if (val !== null) {
+        createParticles(px, py, GEM_TYPES[val].color);
+    }
+    grid[r][c] = null;
+    shakeTime = 10;
+    addFloatingText("🔨 CASSE !", px, py, '#34d399');
+
+    setTimeout(() => {
+        applyGravity();
+        setTimeout(() => {
+            let matches = findMatches();
+            if (matches.length > 0) {
+                processMatches(matches);
+            } else {
+                isAnimating = false;
+                resetIdleTimer();
+                checkGameStatus();
+            }
+        }, 300);
+    }, 300);
+}
 
 function swapAndCheck(r1, c1, r2, c2) {
     let temp = grid[r1][c1];
     grid[r1][c1] = grid[r2][c2];
     grid[r2][c2] = temp;
-    draw();
 
     setTimeout(() => {
         let matches = findMatches();
@@ -865,7 +911,6 @@ function swapAndCheck(r1, c1, r2, c2) {
             grid[r2][c2] = temp;
             isAnimating = false;
             resetIdleTimer();
-            draw();
         }
     }, 200);
 }
@@ -930,12 +975,8 @@ function processMatches(matches) {
     avgY /= matches.length;
     addFloatingText(isBonus ? `⭐ COMBO +${pointsGained}` : `+${pointsGained}`, avgX, avgY, isBonus ? '#fef08a' : '#38bdf8');
 
-    draw();
-
     setTimeout(() => {
         applyGravity();
-        draw();
-
         setTimeout(() => {
             let chainMatches = findMatches();
             if (chainMatches.length > 0) {
@@ -982,17 +1023,15 @@ function checkGameStatus() {
         stopBackgroundMusic();
         playSound('win');
         launchFireworks();
-        draw();
     } else if (movesLeft <= 0) {
         gameState = 'GAMEOVER';
         clearTimeout(idleTimer);
         stopBackgroundMusic();
         playSound('gameover');
-        draw();
     }
 }
 
-// Initialisation au chargement de l'application sur le Menu
+// Initialisation au chargement
 if (window.PokiSDK) window.PokiSDK.gameLoadingFinished();
 score = 0;
 GRID_SIZE = getGridSizeForLevel(currentLevel);
@@ -1005,6 +1044,8 @@ movesEl.textContent = config.moves;
 highScoreEl.textContent = highScore;
 initGrid();
 gameState = 'MENU';
-startBackgroundMusic(); // Lancement de la musique dès l'accueil
+startBackgroundMusic();
 resetIdleTimer();
+
+// Lancement immédiat de la boucle de rendu
 draw();

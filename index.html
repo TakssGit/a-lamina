@@ -22,7 +22,7 @@
         #game-container {
             text-align: center;
             background: linear-gradient(180deg, #4c1d95 0%, #2e1065 100%);
-            padding: 18px;
+            padding: 16px;
             border-radius: 30px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(244, 114, 182, 0.4);
             border: 5px solid #f472b6;
@@ -35,20 +35,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         h1 {
             color: #fef08a;
             letter-spacing: 1.5px;
-            font-size: 1.7rem;
+            font-size: 1.6rem;
             text-shadow: 0 3px 6px rgba(0,0,0,0.8), 0 0 10px #f472b6;
-            animation: pulseTitle 2s infinite alternate;
-        }
-
-        @keyframes pulseTitle {
-            0% { transform: scale(1); text-shadow: 0 0 10px #f472b6; }
-            100% { transform: scale(1.03); text-shadow: 0 0 20px #fef08a; }
         }
 
         .header-buttons {
@@ -60,52 +54,68 @@
             background: linear-gradient(180deg, #f472b6 0%, #db2777 100%);
             color: #ffffff;
             border: 3px solid #fef08a;
-            width: 44px;
-            height: 44px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
             cursor: pointer;
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 5px 0 #831843, 0 8px 12px rgba(0,0,0,0.5);
-            transition: transform 0.08s ease, box-shadow 0.08s ease;
+            box-shadow: 0 4px 0 #831843, 0 6px 10px rgba(0,0,0,0.5);
         }
-        .btn-icon:active {
-            transform: translateY(4px);
-            box-shadow: 0 1px 0 #831843, 0 3px 6px rgba(0,0,0,0.4);
-        }
+        .btn-icon:active { transform: translateY(4px); box-shadow: none; }
 
         #level-info {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             color: #fef08a;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             text-align: left;
             font-weight: bold;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
 
         .hud {
             display: flex;
             justify-content: space-around;
-            margin-bottom: 12px;
-            font-size: 0.9rem;
+            margin-bottom: 10px;
+            font-size: 0.88rem;
             background: linear-gradient(180deg, #78350f 0%, #451a03 100%);
-            padding: 10px;
-            border-radius: 16px;
+            padding: 8px;
+            border-radius: 14px;
             border: 3px solid #fcd34d;
             gap: 5px;
             box-shadow: inset 0 3px 6px rgba(0,0,0,0.7), 0 4px 8px rgba(0,0,0,0.4);
         }
-        .hud div {
-            color: #fef08a;
-            font-weight: bold;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+        .hud div { color: #fef08a; font-weight: bold; }
+        .hud span { color: #38bdf8; font-weight: bold; }
+
+        .powerups-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 10px;
         }
-        .hud span {
-            color: #38bdf8;
+
+        .powerup-btn {
+            background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+            border: 3px solid #fef08a;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
             font-weight: bold;
+            font-size: 0.85rem;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #0369a1, 0 6px 8px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
+        .powerup-btn.active {
+            border-color: #ffffff;
+            background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 0 12px #34d399, 0 4px 0 #047857;
+        }
+        .powerup-btn:active { transform: translateY(3px); box-shadow: none; }
 
         canvas {
             background-color: #0f051d;
@@ -115,20 +125,19 @@
             cursor: pointer;
             width: 100%;
             height: auto;
-            max-width: 380px;
-            max-height: 380px;
+            max-width: 370px;
+            max-height: 370px;
             box-shadow: inset 0 0 25px rgba(0,0,0,0.9), 0 0 15px rgba(252, 211, 77, 0.3);
         }
 
         .instructions {
-            margin-top: 10px;
-            font-size: 0.95rem;
+            margin-top: 8px;
+            font-size: 0.9rem;
             color: #fef08a;
             font-weight: bold;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.9);
             background: rgba(255, 255, 255, 0.12);
-            padding: 8px;
-            border-radius: 14px;
+            padding: 6px;
+            border-radius: 12px;
             border: 2px dashed #f472b6;
         }
 
@@ -145,43 +154,19 @@
             gap: 12px;
             padding: 20px;
             border: 5px solid #fcd34d;
-            box-shadow: inset 0 0 30px rgba(120, 53, 15, 0.8);
-            animation: fadeInModal 0.25s ease-out;
         }
 
-        @keyframes fadeInModal {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        #settings-modal h2 { 
-            color: #fef08a; 
-            font-size: 1.6rem; 
-            text-shadow: 0 3px 6px rgba(0,0,0,0.8), 0 0 10px #f472b6; 
-            margin-bottom: 5px;
-        }
+        #settings-modal h2 { color: #fef08a; font-size: 1.6rem; margin-bottom: 5px; }
         .modal-btn {
             background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
             color: white; border: 3px solid #bae6fd;
             padding: 11px 18px; border-radius: 18px; font-weight: bold; font-size: 1.05rem;
             cursor: pointer; box-shadow: 0 5px 0 #0369a1, 0 8px 12px rgba(0,0,0,0.4);
             width: 88%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            transition: transform 0.08s ease;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
         }
-        .modal-btn.danger {
-            background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
-            border-color: #fecdd3;
-            box-shadow: 0 5px 0 #9f1239, 0 8px 12px rgba(0,0,0,0.4);
-        }
-        .modal-btn.warning {
-            background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
-            border-color: #fde68a;
-            box-shadow: 0 5px 0 #b45309, 0 8px 12px rgba(0,0,0,0.4);
-        }
+        .modal-btn.danger { background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%); border-color: #fecdd3; box-shadow: 0 5px 0 #9f1239; }
+        .modal-btn.warning { background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%); border-color: #fde68a; box-shadow: 0 5px 0 #b45309; }
         .modal-btn:active { transform: translateY(4px); box-shadow: none; }
     </style>
 </head>
@@ -196,10 +181,16 @@
         </div>
         <div id="level-info">Niveau 1</div>
         <div class="hud">
-            <div>Score : <span id="score">0</span> / <span id="target-score">1200</span></div>
+            <div>Score : <span id="score">0</span> / <span id="target-score">500</span></div>
             <div>Top : <span id="high-score">0</span></div>
             <div>Coups : <span id="moves">18</span></div>
         </div>
+
+        <div class="powerups-bar">
+            <button id="pu-hammer" class="powerup-btn" title="Marteau Magique">🔨 Marteau</button>
+            <button id="pu-shuffle" class="powerup-btn" title="Mélangeur Magique">🔀 Mélanger</button>
+        </div>
+
         <canvas id="gameCanvas" width="400" height="400"></canvas>
         <div class="instructions">⭐ Aligne 3 cristaux magiques ou plus ! ⭐</div>
 
