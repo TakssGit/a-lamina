@@ -1,4 +1,4 @@
-// a-lamina - Bloc 3 : Version Finale (Menu Principal, Niveaux, Effets, Audio, Pause, LocalStorage & SDK Ads)
+// a-lamina - Bloc 4 : Direction Artistique Cristaux, Floating Text, Screen Shake & Audio Mute
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -6,10 +6,16 @@ const highScoreEl = document.getElementById('high-score');
 const movesEl = document.getElementById('moves');
 const levelInfoEl = document.getElementById('level-info');
 const pauseBtn = document.getElementById('pause-btn');
+const muteBtn = document.getElementById('mute-btn');
 
 const GRID_SIZE = 6;
 const TILE_SIZE = canvas.width / GRID_SIZE;
-const COLORS = ['#f43f5e', '#38bdf8', '#fbbf24', '#34d399']; // Rouge, Bleu, Jaune, Vert
+const GEM_TYPES = [
+    { color: '#f43f5e', light: '#fb7185', dark: '#be123c', shape: 'diamond' }, // Rubis
+    { color: '#38bdf8', light: '#7dd3fc', dark: '#0284c7', shape: 'rhombus' }, // Saphir
+    { color: '#fbbf24', light: '#fde047', dark: '#d97706', shape: 'circle' },  // Topaze
+    { color: '#34d399', light: '#6ee7b7', dark: '#059669', shape: 'hexagon' }  // Émeraude
+];
 
 let grid = [];
 let score = 0;
@@ -17,8 +23,8 @@ let highScore = parseInt(localStorage.getItem('alamina_highscore')) || 0;
 let currentLevel = parseInt(localStorage.getItem('alamina_level')) || 1;
 
 let levelConfig = {
-    1: { target: 500, moves: 15, name: "Niveau 1 : Alignez 3 blocs" },
-    2: { target: 800, moves: 14, name: "Niveau 2 : Défi Stratégique" },
+    1: { target: 500, moves: 15, name: "Niveau 1 : Cristaux de Bas" },
+    2: { target: 800, moves: 14, name: "Niveau 2 : Caverne aux Gemmes" },
     3: { target: 1200, moves: 12, name: "Niveau 3 : Maître Lamina" }
 };
 
@@ -27,10 +33,19 @@ let movesLeft = levelConfig[currentLevel] ? levelConfig[currentLevel].moves : le
 
 let selectedTile = null;
 let isAnimating = false;
-let gameState = 'MENU'; // 'MENU', 'PLAYING', 'VICTORY', 'GAMEOVER', 'PAUSED', 'AD_LOADING'
+let gameState = 'MENU';
 let particles = [];
+let floatingTexts = [];
+let shakeTime = 0;
+let isMuted = false;
 
-// --- GESTION DU SDK PUBLICITAIRE (Simulation Web Ads) ---
+// --- GESTION MUTE AUDIO ---
+muteBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    muteBtn.textContent = isMuted ? "🔇" : "🔊";
+});
+
+// --- GESTION DU SDK PUBLICITAIRE (Simulation) ---
 function showAd(type, callback) {
     let previousState = gameState;
     gameState = 'AD_LOADING';
@@ -74,7 +89,7 @@ function showAd(type, callback) {
     }, 1000);
 }
 
-// --- SAUVEGARDE LOCALSTORAGE ---
+// --- LOCALSTORAGE ---
 function updateHighScore() {
     if (score > highScore) {
         highScore = score;
@@ -96,7 +111,7 @@ function initAudio() {
 }
 
 function playSound(type) {
-    if (gameState === 'PAUSED' || gameState === 'AD_LOADING' || gameState === 'MENU') return;
+    if (isMuted || gameState === 'PAUSED' || gameState === 'AD_LOADING' || gameState === 'MENU') return;
     try {
         initAudio();
         if (!audioCtx) return;
@@ -108,57 +123,68 @@ function playSound(type) {
 
         if (type === 'select') {
             osc.frequency.setValueAtTime(400, now);
-            gain.gain.setValueAtTime(0.1, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-            osc.start(now); osc.stop(now + 0.1);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+            osc.start(now); osc.stop(now + 0.08);
         } else if (type === 'swap') {
             osc.frequency.setValueAtTime(300, now);
-            osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
-            gain.gain.setValueAtTime(0.1, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-            osc.start(now); osc.stop(now + 0.15);
+            osc.frequency.exponentialRampToValueAtTime(600, now + 0.12);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+            osc.start(now); osc.stop(now + 0.12);
         } else if (type === 'match') {
-            osc.frequency.setValueAtTime(500, now);
-            osc.frequency.setValueAtTime(800, now + 0.1);
-            gain.gain.setValueAtTime(0.15, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-            osc.start(now); osc.stop(now + 0.3);
+            osc.frequency.setValueAtTime(523.25, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.08);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+            osc.start(now); osc.stop(now + 0.25);
         } else if (type === 'win') {
             let notes = [523.25, 659.25, 783.99, 1046.50];
             notes.forEach((freq, index) => {
                 let o = audioCtx.createOscillator();
                 let g = audioCtx.createGain();
                 o.connect(g); g.connect(audioCtx.destination);
-                o.frequency.setValueAtTime(freq, now + index * 0.1);
-                g.gain.setValueAtTime(0.15, now + index * 0.1);
-                g.gain.exponentialRampToValueAtTime(0.01, now + index * 0.1 + 0.3);
-                o.start(now + index * 0.1); o.stop(now + index * 0.1 + 0.3);
+                o.frequency.setValueAtTime(freq, now + index * 0.08);
+                g.gain.setValueAtTime(0.12, now + index * 0.08);
+                g.gain.exponentialRampToValueAtTime(0.01, now + index * 0.08 + 0.25);
+                o.start(now + index * 0.08); o.stop(now + index * 0.08 + 0.25);
             });
         } else if (type === 'gameover') {
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(200, now);
-            osc.frequency.linearRampToValueAtTime(80, now + 0.4);
-            gain.gain.setValueAtTime(0.15, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-            osc.start(now); osc.stop(now + 0.4);
+            osc.frequency.setValueAtTime(220, now);
+            osc.frequency.linearRampToValueAtTime(90, now + 0.35);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+            osc.start(now); osc.stop(now + 0.35);
         }
     } catch (e) {}
 }
 
-// --- SYSTÈME DE PARTICULES ---
+// --- PARTICULES & TEXTE FLOTTANT ---
 function createParticles(pixelX, pixelY, color) {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
         particles.push({
             x: pixelX, y: pixelY,
-            vx: (Math.random() - 0.5) * 6,
-            vy: (Math.random() - 0.5) * 6,
-            size: Math.random() * 4 + 2,
+            vx: (Math.random() - 0.5) * 7,
+            vy: (Math.random() - 0.5) * 7,
+            size: Math.random() * 5 + 2,
             color: color, alpha: 1
         });
     }
 }
 
-function updateAndDrawParticles() {
+function addFloatingText(text, x, y, color = '#fbbf24') {
+    floatingTexts.push({
+        text: text,
+        x: x,
+        y: y,
+        alpha: 1,
+        color: color
+    });
+}
+
+function updateAndDrawEffects() {
+    // Particules
     for (let i = particles.length - 1; i >= 0; i--) {
         let p = particles[i];
         p.x += p.vx; p.y += p.vy; p.alpha -= 0.04;
@@ -174,6 +200,95 @@ function updateAndDrawParticles() {
             ctx.restore();
         }
     }
+
+    // Textes flottants (+50 PTS)
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        let ft = floatingTexts[i];
+        ft.y -= 1.5;
+        ft.alpha -= 0.03;
+        if (ft.alpha <= 0) {
+            floatingTexts.splice(i, 1);
+        } else {
+            ctx.save();
+            ctx.globalAlpha = ft.alpha;
+            ctx.fillStyle = ft.color;
+            ctx.font = 'bold 18px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.fillText(ft.text, ft.x, ft.y);
+            ctx.restore();
+        }
+    }
+}
+
+// --- RENDU DES GEMMES STYLE CRISTAUX EN CANVAS ---
+function drawGem(r, c, typeIdx) {
+    let gem = GEM_TYPES[typeIdx];
+    let cx = c * TILE_SIZE + TILE_SIZE / 2;
+    let cy = r * TILE_SIZE + TILE_SIZE / 2;
+    let size = TILE_SIZE * 0.38;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Ombre sous la gemme
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.beginPath();
+    ctx.arc(2, 4, size, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Rendu des facettes selon le type de cristal
+    ctx.fillStyle = gem.color;
+    ctx.strokeStyle = gem.dark;
+    ctx.lineWidth = 2;
+
+    if (gem.shape === 'diamond') { // Losange (Rubis)
+        ctx.beginPath();
+        ctx.moveTo(0, -size); ctx.lineTo(size, 0); ctx.lineTo(0, size); ctx.lineTo(-size, 0);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = gem.light;
+        ctx.beginPath();
+        ctx.moveTo(0, -size); ctx.lineTo(size * 0.4, 0); ctx.lineTo(0, size * 0.4); ctx.lineTo(-size * 0.4, 0);
+        ctx.closePath(); ctx.fill();
+    } 
+    else if (gem.shape === 'rhombus') { // Carré facetté (Saphir)
+        ctx.beginPath();
+        ctx.rect(-size*0.8, -size*0.8, size*1.6, size*1.6);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = gem.light;
+        ctx.beginPath();
+        ctx.rect(-size*0.4, -size*0.4, size*0.8, size*0.8);
+        ctx.fill();
+    }
+    else if (gem.shape === 'circle') { // Sphere brillante (Topaze)
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.9, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = gem.light;
+        ctx.beginPath();
+        ctx.arc(-size*0.3, -size*0.3, size * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    else if (gem.shape === 'hexagon') { // Hexagone (Émeraude)
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            let angle = (Math.PI / 3) * i;
+            let hx = size * Math.cos(angle);
+            let hy = size * Math.sin(angle);
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+        }
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = gem.light;
+        ctx.beginPath();
+        ctx.arc(-size*0.2, -size*0.2, size * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
 }
 
 // --- INITIALISATION DU JEU ---
@@ -203,7 +318,7 @@ function initGrid() {
         for (let r = 0; r < GRID_SIZE; r++) {
             grid[r] = [];
             for (let c = 0; c < GRID_SIZE; c++) {
-                grid[r][c] = Math.floor(Math.random() * COLORS.length);
+                grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
             }
         }
     } while (checkInitialMatches());
@@ -219,33 +334,44 @@ function checkInitialMatches() {
     return false;
 }
 
-// --- RENDU CANVAS ---
+// --- RENDU CANVAS AVEC SCREEN SHAKE ---
 function draw() {
+    ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
+    // Effet de Secousse (Screen Shake)
+    if (shakeTime > 0) {
+        let dx = (Math.random() - 0.5) * 8;
+        let dy = (Math.random() - 0.5) * 8;
+        ctx.translate(dx, dy);
+        shakeTime--;
+    }
+
+    // Grille de fond
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
             const val = grid[r][c];
             if (val !== null && val !== undefined) {
-                ctx.fillStyle = COLORS[val];
-                ctx.fillRect(c * TILE_SIZE + 6, r * TILE_SIZE + 6, TILE_SIZE - 12, TILE_SIZE - 12);
-
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                ctx.fillRect(c * TILE_SIZE + 10, r * TILE_SIZE + 10, TILE_SIZE - 20, 6);
+                drawGem(r, c, val);
             }
             
             if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
                 ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(c * TILE_SIZE + 3, r * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+                ctx.lineWidth = 3;
+                ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
             }
         }
     }
 
-    updateAndDrawParticles();
+    updateAndDrawEffects();
+    ctx.restore();
 
     if (gameState === 'MENU') {
-        drawOverlay("A-LAMINA", "#f43f5e", "Cliquez ici ou appuyez pour JOUER");
+        drawOverlay("A-LAMINA", "#f43f5e", "Cliquez ici pour JOUER");
     } else if (gameState === 'VICTORY') {
         drawOverlay("VICTOIRE !", "#34d399", currentLevel < 3 ? "Cliquez pour le Niveau Suivant" : "Jeu Terminé ! Recommencer");
     } else if (gameState === 'GAMEOVER') {
@@ -254,7 +380,7 @@ function draw() {
         drawOverlay("EN PAUSE", "#38bdf8", "Cliquez sur Pause pour Reprendre");
     }
 
-    if (particles.length > 0 || gameState !== 'PLAYING') {
+    if (particles.length > 0 || floatingTexts.length > 0 || shakeTime > 0 || gameState !== 'PLAYING') {
         requestAnimationFrame(draw);
     }
 }
@@ -302,7 +428,7 @@ window.addEventListener('blur', () => {
     }
 });
 
-// --- INTERACTIONS CLAVIER (Publicité récompensée) ---
+// --- INTERACTIONS CLAVIER ---
 window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && gameState === 'GAMEOVER') {
         e.preventDefault();
@@ -317,7 +443,7 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// --- INTERACTIONS CLICS CANVAS ---
+// --- INTERACTIONS CANVAS ---
 canvas.addEventListener('pointerdown', (e) => {
     if (gameState === 'MENU') {
         startGame();
@@ -421,17 +547,31 @@ function findMatches() {
 }
 
 function processMatches(matches) {
-    score += matches.length * 50;
+    let pointsGained = matches.length * 50;
+    score += pointsGained;
     scoreEl.textContent = score;
     updateHighScore();
 
+    // Déclencher le Screen Shake et ajouter le texte flottant
+    shakeTime = 8;
+    let avgX = 0, avgY = 0;
+
     matches.forEach(m => {
         let val = grid[m.r][m.c];
+        let px = m.c * TILE_SIZE + TILE_SIZE / 2;
+        let py = m.r * TILE_SIZE + TILE_SIZE / 2;
+        avgX += px; avgY += py;
+
         if (val !== null) {
-            createParticles(m.c * TILE_SIZE + TILE_SIZE / 2, m.r * TILE_SIZE + TILE_SIZE / 2, COLORS[val]);
+            createParticles(px, py, GEM_TYPES[val].color);
         }
         grid[m.r][m.c] = null;
     });
+
+    avgX /= matches.length;
+    avgY /= matches.length;
+    addFloatingText(`+${pointsGained}`, avgX, avgY, '#38bdf8');
+
     draw();
 
     setTimeout(() => {
@@ -462,7 +602,7 @@ function applyGravity() {
             }
         }
         for (let r = writeRow; r >= 0; r--) {
-            grid[r][c] = Math.floor(Math.random() * COLORS.length);
+            grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
         }
     }
 }
@@ -479,5 +619,5 @@ function checkGameStatus() {
     }
 }
 
-// Initialisation de l'affichage du menu d'accueil au chargement
+// Initialisation au chargement
 draw();
