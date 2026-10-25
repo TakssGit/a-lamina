@@ -1,25 +1,106 @@
-// a-Lamina - Moteur Corrigé (Sans boucle infinie)
+// a-Lamina - Moteur complet regroupé (Victory Dashboard, Match-4, Mode Daltonien & Auto-Save)
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const highScoreEl = document.getElementById('high-score');
 const movesEl = document.getElementById('moves');
 const levelInfoEl = document.getElementById('level-info');
+const gameContainer = document.getElementById('game-container');
 const pauseBtn = document.getElementById('pause-btn');
 const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const modalSound = document.getElementById('modal-sound');
 const modalMusic = document.getElementById('modal-music');
+const modalColorblind = document.getElementById('modal-colorblind');
 const modalRefresh = document.getElementById('modal-refresh');
 const modalReset = document.getElementById('modal-reset');
 const modalClose = document.getElementById('modal-close');
 
 const puHammerBtn = document.getElementById('pu-hammer');
 const puShuffleBtn = document.getElementById('pu-shuffle');
+const hammerBadge = document.getElementById('hammer-badge');
+const shuffleBadge = document.getElementById('shuffle-badge');
 
 let currentLevel = parseInt(localStorage.getItem('alamina_level')) || 1;
+let maxUnlockedLevel = parseInt(localStorage.getItem('alamina_max_level')) || currentLevel;
 let highScore = parseInt(localStorage.getItem('alamina_highscore')) || 0;
-let score = 0;
+let score = parseInt(localStorage.getItem('alamina_score')) || 0;
+let levelStars = JSON.parse(localStorage.getItem('alamina_stars')) || {};
+
+let hammerUsesLeft = 3;
+let shuffleUsesLeft = 2;
+let comboMultiplier = 1;
+let colorblindMode = localStorage.getItem('alamina_colorblind') === 'true';
+
+function updatePowerupBadges() {
+    hammerBadge.textContent = hammerUsesLeft;
+    shuffleBadge.textContent = shuffleUsesLeft;
+    puHammerBtn.style.opacity = hammerUsesLeft > 0 ? '1' : '0.4';
+    puShuffleBtn.style.opacity = shuffleUsesLeft > 0 ? '1' : '0.4';
+}
+
+function getThemeForLevel(lvl) {
+    if (lvl === 1 || lvl === 2) {
+        return {
+            name: "Cristaux Magiques",
+            backgroundGradient: "linear-gradient(180deg, #4c1d95 0%, #2e1065 100%)",
+            borderColor: "#f472b6",
+            items: [
+                { color: '#f43f5e', shape: 'diamond', symbol: '▲' },
+                { color: '#38bdf8', shape: 'star', symbol: '★' },
+                { color: '#fbbf24', shape: 'circle', symbol: '●' },
+                { color: '#34d399', shape: 'hexagon', symbol: '■' }
+            ]
+        };
+    } else if (lvl === 3 || lvl === 4) {
+        return {
+            name: "Fruits Juteux 🍓",
+            backgroundGradient: "linear-gradient(180deg, #065f46 0%, #064e3b 100%)",
+            borderColor: '#34d399',
+            items: [
+                { color: '#ef4444', shape: 'circle', symbol: '🍓' },
+                { color: '#f59e0b', shape: 'star', symbol: '🍍' },
+                { color: '#eab308', shape: 'diamond', symbol: '🍋' },
+                { color: '#10b981', shape: 'hexagon', symbol: '🍏' }
+            ]
+        };
+    } else if (lvl === 5 || lvl === 6) {
+        return {
+            name: "Animaux Mignons 🐾",
+            backgroundGradient: "linear-gradient(180deg, #1e3a8a 0%, #172554 100%)",
+            borderColor: '#60a5fa',
+            items: [
+                { color: '#ec4899', shape: 'circle', symbol: '🐼' },
+                { color: '#0ea5e9', shape: 'star', symbol: '🦊' },
+                { color: '#eab308', shape: 'diamond', symbol: '🐰' },
+                { color: '#8b5cf6', shape: 'hexagon', symbol: '🐨' }
+            ]
+        };
+    } else {
+        return {
+            name: "Bonbonland 🍬",
+            backgroundGradient: "linear-gradient(180deg, #9d174d 0%, #701a75 100%)",
+            borderColor: '#f472b6',
+            items: [
+                { color: '#f43f5e', shape: 'diamond', symbol: '🍬' },
+                { color: '#06b6d4', shape: 'star', symbol: '🍭' },
+                { color: '#f59e0b', shape: 'circle', symbol: '🍫' },
+                { color: '#10b981', shape: 'hexagon', symbol: '🍩' }
+            ]
+        };
+    }
+}
+
+let currentTheme = getThemeForLevel(currentLevel);
+let GEM_TYPES = currentTheme.items;
+
+function applyThemeVisuals() {
+    currentTheme = getThemeForLevel(currentLevel);
+    GEM_TYPES = currentTheme.items;
+    gameContainer.style.background = currentTheme.backgroundGradient;
+    gameContainer.style.borderColor = currentTheme.borderColor;
+    document.getElementById('colorblind-txt').textContent = colorblindMode ? "ACTIVÉ" : "DÉSACTIVÉ";
+}
 
 function getGridSizeForLevel(lvl) {
     if (lvl === 1 || lvl === 2) return 6;
@@ -30,29 +111,21 @@ function getGridSizeForLevel(lvl) {
 
 let GRID_SIZE = getGridSizeForLevel(currentLevel);
 let TILE_SIZE = canvas.width / GRID_SIZE;
-
-const GEM_TYPES = [
-    { color: '#f43f5e', light: '#fb7185', dark: '#be123c', shape: 'diamond' }, 
-    { color: '#38bdf8', light: '#7dd3fc', dark: '#0284c7', shape: 'rhombus' }, 
-    { color: '#fbbf24', light: '#fde047', dark: '#d97706', shape: 'circle' },  
-    { color: '#34d399', light: '#6ee7b7', dark: '#059669', shape: 'hexagon' }  
-];
-
 let grid = [];
 
 function getLevelConfig(lvl) {
-    let baseTarget = 500 + (lvl - 1) * 350 + Math.floor(Math.pow(lvl, 1.25) * 100);
+    let baseTarget = 450 + (lvl - 1) * 280 + Math.floor(Math.pow(lvl, 1.15) * 80);
     baseTarget = Math.round(baseTarget / 50) * 50;
     return {
         target: baseTarget,
         moves: 18,
-        name: `Niveau ${lvl}`
+        name: `Niv. ${lvl}`
     };
 }
 
 let levelConfig = getLevelConfig(currentLevel);
 let targetScore = levelConfig.target;
-let movesLeft = levelConfig.moves;
+let movesLeft = parseInt(localStorage.getItem('alamina_moves')) || levelConfig.moves;
 
 let selectedTile = null;
 let isAnimating = false;
@@ -79,7 +152,7 @@ for (let i = 0; i < 12; i++) {
         size: Math.random() * 16 + 8,
         speedY: (Math.random() - 0.5) * 0.5,
         speedX: (Math.random() - 0.5) * 0.5,
-        type: Math.floor(Math.random() * GEM_TYPES.length)
+        type: Math.floor(Math.random() * 4)
     });
 }
 
@@ -125,6 +198,11 @@ function swapInGrid(r1, c1, r2, c2) {
 
 puHammerBtn.addEventListener('click', () => {
     if (gameState !== 'PLAYING' || isAnimating) return;
+    if (hammerUsesLeft <= 0) {
+        addFloatingText("❌ PLUS DE MARTEAU !", canvas.width / 2, canvas.height / 2, '#f43f5e');
+        playSound('gameover');
+        return;
+    }
     activePowerup = activePowerup === 'hammer' ? null : 'hammer';
     puHammerBtn.classList.toggle('active', activePowerup === 'hammer');
     playSound('select');
@@ -133,6 +211,13 @@ puHammerBtn.addEventListener('click', () => {
 
 puShuffleBtn.addEventListener('click', () => {
     if (gameState !== 'PLAYING' || isAnimating) return;
+    if (shuffleUsesLeft <= 0) {
+        addFloatingText("❌ PLUS DE MÉLANGE !", canvas.width / 2, canvas.height / 2, '#f43f5e');
+        playSound('gameover');
+        return;
+    }
+    shuffleUsesLeft--;
+    updatePowerupBadges();
     activePowerup = null;
     puHammerBtn.classList.remove('active');
     playSound('bonus');
@@ -190,7 +275,12 @@ function stopBackgroundMusic() {
 
 function saveProgress() {
     localStorage.setItem('alamina_level', currentLevel);
+    localStorage.setItem('alamina_max_level', maxUnlockedLevel);
     localStorage.setItem('alamina_highscore', highScore);
+    localStorage.setItem('alamina_score', score);
+    localStorage.setItem('alamina_moves', movesLeft);
+    localStorage.setItem('alamina_stars', JSON.stringify(levelStars));
+    localStorage.setItem('alamina_colorblind', colorblindMode);
 }
 
 window.addEventListener('beforeunload', () => { saveProgress(); });
@@ -221,7 +311,7 @@ function requestAd(type, onComplete) {
     adOverlay.style.left = '0';
     adOverlay.style.width = '100%';
     adOverlay.style.height = '100%';
-    adOverlay.style.backgroundColor = 'rgba(15, 3, 28, 0.96)';
+    adOverlay.style.backgroundColor = 'rgba(15, 23, 42, 0.96)';
     adOverlay.style.display = 'flex';
     adOverlay.style.flexDirection = 'column';
     adOverlay.style.justifyContent = 'center';
@@ -232,7 +322,7 @@ function requestAd(type, onComplete) {
     
     let title = type === 'reward' ? "Cadeau Magique (+5 Coups)" : "Portail Magique Interstitiel";
     adOverlay.innerHTML = `
-        <h2 style="color: #fef08a; margin-bottom: 10px;">✨ ${title} ✨</h2>
+        <h2 style="color: #fde047; margin-bottom: 10px;">✨ ${title} ✨</h2>
         <p style="color: #cbd5e1; margin-bottom: 20px;">Chargement de l'énergie féerique...</p>
         <div style="font-size: 2.5rem; font-weight: bold; color: #38bdf8;" id="ad-timer">3</div>
     `;
@@ -278,10 +368,20 @@ modalMusic.addEventListener('click', () => {
     else startBackgroundMusic();
 });
 
+modalColorblind.addEventListener('click', () => {
+    colorblindMode = !colorblindMode;
+    document.getElementById('colorblind-txt').textContent = colorblindMode ? "ACTIVÉ" : "DÉSACTIVÉ";
+    saveProgress();
+});
+
 modalRefresh.addEventListener('click', () => {
     score = 0;
+    comboMultiplier = 1;
     let config = getLevelConfig(currentLevel);
     movesLeft = config.moves;
+    hammerUsesLeft = 3;
+    shuffleUsesLeft = 2;
+    updatePowerupBadges();
     settingsModal.style.display = 'none';
     loadLevel();
 });
@@ -289,10 +389,17 @@ modalRefresh.addEventListener('click', () => {
 modalReset.addEventListener('click', () => {
     if (confirm("Voulez-vous recommencer toute l'aventure au Niveau 1 ?")) {
         currentLevel = 1;
+        maxUnlockedLevel = 1;
         score = 0;
+        comboMultiplier = 1;
+        levelStars = {};
         localStorage.clear();
+        applyThemeVisuals();
         let config = getLevelConfig(1);
         movesLeft = config.moves;
+        hammerUsesLeft = 3;
+        shuffleUsesLeft = 2;
+        updatePowerupBadges();
         settingsModal.style.display = 'none';
         grid = [];
         loadLevel();
@@ -413,8 +520,8 @@ function updateAndDrawEffects() {
 
         ctx.save();
         ctx.globalAlpha = 0.25;
-        let gem = GEM_TYPES[bg.type];
-        ctx.fillStyle = gem.color;
+        let item = GEM_TYPES[bg.type];
+        ctx.fillStyle = item.color;
         ctx.beginPath();
         ctx.arc(bg.x, bg.y, bg.size, 0, Math.PI * 2);
         ctx.fill();
@@ -475,51 +582,77 @@ function updateAndDrawEffects() {
 }
 
 function drawGem(r, c, typeIdx) {
-    let gem = GEM_TYPES[typeIdx];
+    let item = GEM_TYPES[typeIdx];
     let cx = c * TILE_SIZE + TILE_SIZE / 2;
     let cy = r * TILE_SIZE + TILE_SIZE / 2;
-    let size = TILE_SIZE * 0.40;
+    let size = TILE_SIZE * 0.38;
 
     ctx.save();
     ctx.translate(cx, cy);
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.beginPath();
     ctx.arc(2, 4, size, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = gem.color;
+    ctx.fillStyle = item.color;
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
 
-    if (gem.shape === 'diamond') {
+    if (item.shape === 'diamond') {
         ctx.beginPath();
-        ctx.moveTo(0, -size); ctx.lineTo(size, 0); ctx.lineTo(0, size); ctx.lineTo(-size, 0);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
-    } else if (gem.shape === 'rhombus') {
+        ctx.moveTo(0, -size);
+        ctx.lineTo(size * 0.85, 0);
+        ctx.lineTo(0, size);
+        ctx.lineTo(-size * 0.85, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    } else if (item.shape === 'star') {
         ctx.beginPath();
-        ctx.rect(-size*0.8, -size*0.8, size*1.6, size*1.6);
-        ctx.fill(); ctx.stroke();
-    } else if (gem.shape === 'circle') {
-        ctx.beginPath();
-        ctx.arc(0, 0, size * 0.9, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
-    } else if (gem.shape === 'hexagon') {
+        for (let i = 0; i < 5; i++) {
+            let angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+            let x = Math.cos(angle) * size;
+            let y = Math.sin(angle) * size;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            let angleInner = angle + Math.PI / 5;
+            let xInner = Math.cos(angleInner) * (size * 0.45);
+            let yInner = Math.sin(angleInner) * (size * 0.45);
+            ctx.lineTo(xInner, yInner);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    } else if (item.shape === 'hexagon') {
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
             let angle = (Math.PI / 3) * i;
-            let hx = size * Math.cos(angle);
-            let hy = size * Math.sin(angle);
-            if (i === 0) ctx.moveTo(hx, hy);
-            else ctx.lineTo(hx, hy);
+            let x = size * Math.cos(angle);
+            let y = size * Math.sin(angle);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
-        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
     }
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
     ctx.beginPath();
     ctx.arc(-size * 0.3, -size * 0.3, size * 0.3, 0, Math.PI * 2);
     ctx.fill();
+
+    if (colorblindMode && item.symbol) {
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 13px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.symbol, 0, 1);
+    }
 
     ctx.restore();
 }
@@ -527,14 +660,20 @@ function drawGem(r, c, typeIdx) {
 function startGame() {
     gameState = 'PLAYING';
     score = 0;
+    comboMultiplier = 1;
+    applyThemeVisuals();
     let config = getLevelConfig(currentLevel);
     movesLeft = config.moves;
+    hammerUsesLeft = 3;
+    shuffleUsesLeft = 2;
+    updatePowerupBadges();
     activePowerup = null;
     puHammerBtn.classList.remove('active');
     loadLevel();
 }
 
 function loadLevel() {
+    applyThemeVisuals();
     GRID_SIZE = getGridSizeForLevel(currentLevel);
     TILE_SIZE = canvas.width / GRID_SIZE;
 
@@ -565,7 +704,6 @@ function initGrid() {
     }
 }
 
-// Boucle de rendu principale (draw)
 function draw() {
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -579,34 +717,36 @@ function draw() {
 
     hintPulseTimer += 0.03;
 
-    if (grid && grid.length > 0) {
-        for (let r = 0; r < GRID_SIZE; r++) {
-            for (let c = 0; c < GRID_SIZE; c++) {
-                ctx.strokeStyle = 'rgba(252, 211, 77, 0.15)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+        if (grid && grid.length > 0) {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
 
-                const val = grid[r][c];
-                if (val !== null && val !== undefined) {
-                    drawGem(r, c, val);
-                }
-                
-                if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
-                    ctx.strokeStyle = activePowerup === 'hammer' ? '#34d399' : '#ffffff';
-                    ctx.lineWidth = 5;
-                    ctx.strokeRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-                    ctx.strokeStyle = '#f472b6';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-                }
+                    const val = grid[r][c];
+                    if (val !== null && val !== undefined) {
+                        drawGem(r, c, val);
+                    }
+                    
+                    if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
+                        ctx.strokeStyle = activePowerup === 'hammer' ? '#34d399' : '#ffffff';
+                        ctx.lineWidth = 5;
+                        ctx.strokeRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                        ctx.strokeStyle = '#f472b6';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                    }
 
-                if (suggestedMove && !selectedTile && gameState === 'PLAYING' && !activePowerup) {
-                    let isHintTile = suggestedMove.some(pos => pos.r === r && pos.c === c);
-                    if (isHintTile) {
-                        let pulse = Math.abs(Math.sin(hintPulseTimer)) * 4 + 2;
-                        ctx.strokeStyle = '#fef08a';
-                        ctx.lineWidth = pulse;
-                        ctx.strokeRect(c * TILE_SIZE + 3, r * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+                    if (suggestedMove && !selectedTile && gameState === 'PLAYING' && !activePowerup) {
+                        let isHintTile = suggestedMove.some(pos => pos.r === r && pos.c === c);
+                        if (isHintTile) {
+                            let pulse = Math.abs(Math.sin(hintPulseTimer)) * 4 + 2;
+                            ctx.strokeStyle = '#fef08a';
+                            ctx.lineWidth = pulse;
+                            ctx.strokeRect(c * TILE_SIZE + 3, r * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+                        }
                     }
                 }
             }
@@ -618,6 +758,8 @@ function draw() {
 
     if (gameState === 'MENU') {
         drawMainMenuOverlay();
+    } else if (gameState === 'MAP') {
+        drawLevelMapOverlay();
     } else if (gameState === 'VICTORY') {
         drawVictoryProgressionOverlay();
     } else if (gameState === 'GAMEOVER') {
@@ -630,93 +772,167 @@ function draw() {
 }
 
 function drawMainMenuOverlay() {
-    ctx.fillStyle = 'rgba(15, 3, 28, 0.94)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     updateAndDrawEffects();
 
-    let boxX = 30; let boxY = 50; let boxW = canvas.width - 60; let boxH = 260;
-    ctx.fillStyle = 'rgba(76, 29, 149, 0.85)';
-    ctx.strokeStyle = '#fcd34d';
-    ctx.lineWidth = 4;
-    ctx.fillRect(boxX, boxY, boxW, boxH);
-    ctx.strokeRect(boxX, boxY, boxW, boxH);
-
-    ctx.fillStyle = '#fef08a';
-    ctx.font = 'bold 34px Segoe UI';
-    ctx.textAlign = 'center';
-    ctx.fillText("✨ a-Lamina ✨", canvas.width / 2, boxY + 50);
-
-    ctx.fillStyle = '#f472b6';
-    ctx.font = 'bold 18px Segoe UI';
-    ctx.fillText(`Aventure - Niveau ${currentLevel}`, canvas.width / 2, boxY + 95);
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = '15px Segoe UI';
-    ctx.fillText(`Objectif : 0 / ${targetScore} pts`, canvas.width / 2, boxY + 130);
-
-    let btnX = canvas.width / 2 - 90;
-    let btnY = boxY + 165;
-    let btnW = 180;
-    let btnH = 54;
-
-    ctx.fillStyle = '#10b981';
-    ctx.fillRect(btnX, btnY, btnW, btnH);
-    ctx.fillStyle = '#34d399';
-    ctx.fillRect(btnX, btnY, btnW, btnH - 6);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px Segoe UI';
-    ctx.fillText("▶ JOUER", canvas.width / 2, btnY + 34);
-}
-
-function drawVictoryProgressionOverlay() {
-    ctx.fillStyle = 'rgba(15, 3, 28, 0.95)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    updateAndDrawEffects();
+    let boxX = 24; let boxY = 40; let boxW = canvas.width - 48; let boxH = 295;
+    ctx.fillStyle = 'rgba(76, 29, 149, 0.9)';
+    ctx.strokeStyle = '#f472b6';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxW, boxH, 24);
+    ctx.fill();
+    ctx.stroke();
 
     ctx.fillStyle = '#fef08a';
     ctx.font = 'bold 32px Segoe UI';
     ctx.textAlign = 'center';
-    ctx.fillText("✨ NIVEAU RÉUSSI ! ✨", canvas.width / 2, 60);
+    ctx.fillText("✨ a-Lamina ✨", canvas.width / 2, boxY + 55);
 
-    ctx.font = '36px Segoe UI';
-    ctx.fillText("⭐ ⭐ ⭐", canvas.width / 2, 110);
-
-    let boxX = 35; let boxY = 130; let boxW = canvas.width - 70; let boxH = 150;
-    ctx.fillStyle = 'rgba(76, 29, 149, 0.88)';
-    ctx.strokeStyle = '#fcd34d';
-    ctx.lineWidth = 4;
-    ctx.fillRect(boxX, boxY, boxW, boxH);
-    ctx.strokeRect(boxX, boxY, boxW, boxH);
-
-    ctx.fillStyle = '#fbcfe8';
-    ctx.font = 'bold 17px Segoe UI';
-    ctx.fillText(`Niveau ${currentLevel} ➔ Niveau ${currentLevel + 1}`, canvas.width / 2, boxY + 38);
-    ctx.fillStyle = '#38bdf8';
+    ctx.fillStyle = '#f472b6';
     ctx.font = 'bold 18px Segoe UI';
-    ctx.fillText(`Score Validé : ${score} pts`, canvas.width / 2, boxY + 78);
-    ctx.fillStyle = '#34d399';
-    ctx.font = '15px Segoe UI';
-    ctx.fillText(`Meilleur Record : ${highScore}`, canvas.width / 2, boxY + 115);
+    ctx.fillText(`Niv. Actuel : ${currentLevel}`, canvas.width / 2, boxY + 95);
 
     let btnX = canvas.width / 2 - 110;
-    let btnY = 300;
+    let btnY1 = boxY + 125;
     let btnW = 220; let btnH = 50;
 
+    ctx.fillStyle = '#047857';
+    ctx.beginPath(); ctx.roundRect(btnX, btnY1 + 5, btnW, btnH, 16); ctx.fill();
     ctx.fillStyle = '#10b981';
-    ctx.fillRect(btnX, btnY, btnW, btnH);
-    ctx.fillStyle = '#34d399';
-    ctx.fillRect(btnX, btnY, btnW, btnH - 5);
+    ctx.beginPath(); ctx.roundRect(btnX, btnY1, btnW, btnH, 16); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px Segoe UI';
+    ctx.fillText("▶ JOUER", canvas.width / 2, btnY1 + 32);
 
+    let btnY2 = boxY + 190;
+    ctx.fillStyle = '#0369a1';
+    ctx.beginPath(); ctx.roundRect(btnX, btnY2 + 5, btnW, btnH, 16); ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.roundRect(btnX, btnY2, btnW, btnH, 16); ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 18px Segoe UI';
-    ctx.fillText("🚀 CONTINUER", canvas.width / 2, btnY + 32);
+    ctx.fillText("🗺️ Carte Niveaux", canvas.width / 2, btnY2 + 31);
+}
+
+function drawLevelMapOverlay() {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.97)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    updateAndDrawEffects();
+
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 26px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText("🗺️ Carte des Niveaux", canvas.width / 2, 45);
+
+    let cols = 3;
+    let startX = 40;
+    let startY = 75;
+    let size = 90;
+    let gap = 16;
+
+    for (let i = 1; i <= 6; i++) {
+        let r = Math.floor((i - 1) / cols);
+        let c = (i - 1) % cols;
+        let x = startX + c * (size + gap);
+        let y = startY + r * (size + gap);
+
+        let isUnlocked = i <= maxUnlockedLevel;
+
+        ctx.fillStyle = isUnlocked ? 'rgba(76, 29, 149, 0.92)' : 'rgba(30, 41, 59, 0.8)';
+        ctx.strokeStyle = isUnlocked ? '#fef08a' : '#64748b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(x, y, size, size, 16);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = isUnlocked ? '#fef08a' : '#94a3b8';
+        ctx.font = 'bold 20px Segoe UI';
+        ctx.fillText(`Niv ${i}`, x + size / 2, y + 32);
+
+        if (isUnlocked) {
+            let stars = levelStars[i] || (i < currentLevel ? 3 : 0);
+            let starTxt = stars === 3 ? "⭐⭐⭐" : (stars === 2 ? "⭐⭐" : (stars === 1 ? "⭐" : ""));
+            ctx.font = '14px Segoe UI';
+            ctx.fillText(starTxt, x + size / 2, y + 66);
+        } else {
+            ctx.font = '22px Segoe UI';
+            ctx.fillText("🔒", x + size / 2, y + 62);
+        }
+    }
+
+    let btnX = canvas.width / 2 - 110;
+    let btnY = 325;
+    let btnW = 220; let btnH = 44;
+
+    ctx.fillStyle = '#334155';
+    ctx.beginPath(); ctx.roundRect(btnX, btnY + 4, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#64748b';
+    ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 17px Segoe UI';
+    ctx.fillText("⬅️ Menu Principal", canvas.width / 2, btnY + 28);
+}
+
+// 🏆 Tableau de Bord de Fin de Niveau (Victory Dashboard)
+function drawVictoryProgressionOverlay() {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    updateAndDrawEffects();
+
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 28px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText("✨ VICTOIRE MAGIQUE ! ✨", canvas.width / 2, 45);
+
+    ctx.font = '34px Segoe UI';
+    ctx.fillText("⭐ ⭐ ⭐", canvas.width / 2, 88);
+
+    let boxX = 25; let boxY = 100; let boxW = canvas.width - 50; let boxH = 160;
+    ctx.fillStyle = 'rgba(76, 29, 149, 0.92)';
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 18); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#fbcfe8';
+    ctx.font = 'bold 16px Segoe UI';
+    ctx.fillText(`Niveau ${currentLevel} Complété avec succès !`, canvas.width / 2, boxY + 30);
+    
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 18px Segoe UI';
+    ctx.fillText(`🎯 Score Final : ${score} pts`, canvas.width / 2, boxY + 68);
+
+    ctx.fillStyle = '#34d399';
+    ctx.font = '15px Segoe UI';
+    ctx.fillText(`🏆 Meilleur Record : ${highScore} pts`, canvas.width / 2, boxY + 98);
+
+    ctx.fillStyle = '#fde047';
+    ctx.font = '14px Segoe UI';
+    ctx.fillText(`⚡ Bonus Coups restants convertis !`, canvas.width / 2, boxY + 130);
+
+    let btnX = canvas.width / 2 - 110;
+    let btnY1 = 270;
+    let btnY2 = 322;
+    let btnW = 220; let btnH = 42;
+
+    ctx.fillStyle = '#047857'; ctx.beginPath(); ctx.roundRect(btnX, btnY1 + 4, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.roundRect(btnX, btnY1, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 17px Segoe UI';
+    ctx.fillText("🚀 Niveau Suivant", canvas.width / 2, btnY1 + 27);
+
+    ctx.fillStyle = '#0369a1'; ctx.beginPath(); ctx.roundRect(btnX, btnY2 + 4, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.roundRect(btnX, btnY2, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText("🗺️ Voir la Carte", canvas.width / 2, btnY2 + 27);
 }
 
 function drawGameOverOverlay() {
-    ctx.fillStyle = 'rgba(15, 3, 28, 0.94)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = '#f43f5e';
@@ -730,22 +946,22 @@ function drawGameOverOverlay() {
 
     let btn1X = canvas.width / 2 - 110;
     let btn1Y = canvas.height / 2 + 10;
-    let btnW = 220; let btnH = 45;
+    let btn2Y = canvas.height / 2 + 62;
+    let btnW = 220; let btnH = 42;
 
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(btn1X, btn1Y, btnW, btnH);
+    ctx.fillStyle = '#0369a1'; ctx.beginPath(); ctx.roundRect(btn1X, btn1Y + 4, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.roundRect(btn1X, btn1Y, btnW, btnH, 14); ctx.fill();
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Segoe UI';
-    ctx.fillText("📺 +5 Coups Magiques", canvas.width / 2, btn1Y + 28);
+    ctx.fillText("📺 +5 Coups Magiques", canvas.width / 2, btn1Y + 27);
 
-    let btn2Y = canvas.height / 2 + 65;
-    ctx.fillStyle = '#ef4444';
-    ctx.fillRect(btn1X, btn2Y, btnW, btnH);
+    ctx.fillStyle = '#9f1239'; ctx.beginPath(); ctx.roundRect(btn1X, btn2Y + 4, btnW, btnH, 14); ctx.fill();
+    ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.roundRect(btn1X, btn2Y, btnW, btnH, 14); ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.fillText("🔄 Recommencer", canvas.width / 2, btn2Y + 28);
+    ctx.fillText("🔄 Recommencer", canvas.width / 2, btn2Y + 27);
 }
 
 function drawOverlay(title, color, subtitle) {
-    ctx.fillStyle = 'rgba(15, 3, 28, 0.88)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = color;
@@ -790,32 +1006,85 @@ canvas.addEventListener('pointerdown', (e) => {
     const y = (e.clientY - rect.top) * scaleY;
 
     if (gameState === 'MENU') {
-        startGame();
+        let boxY = 40;
+        let btnX = canvas.width / 2 - 110;
+        let btnY1 = boxY + 125;
+        let btnY2 = boxY + 190;
+        let btnW = 220; let btnH = 50;
+
+        if (x >= btnX && x <= btnX + btnW && y >= btnY1 && y <= btnY1 + btnH) {
+            startGame();
+        } else if (x >= btnX && x <= btnX + btnW && y >= btnY2 && y <= btnY2 + btnH) {
+            gameState = 'MAP';
+        }
         return;
     }
+
+    if (gameState === 'MAP') {
+        let cols = 3;
+        let startX = 40;
+        let startY = 75;
+        let size = 90;
+        let gap = 16;
+
+        for (let i = 1; i <= 6; i++) {
+            let r = Math.floor((i - 1) / cols);
+            let c = (i - 1) % cols;
+            let nx = startX + c * (size + gap);
+            let ny = startY + r * (size + gap);
+
+            if (x >= nx && x <= nx + size && y >= ny && y <= ny + size) {
+                if (i <= maxUnlockedLevel) {
+                    currentLevel = i;
+                    score = 0;
+                    comboMultiplier = 1;
+                    applyThemeVisuals();
+                    startGame();
+                }
+                return;
+            }
+        }
+
+        let btnX = canvas.width / 2 - 110;
+        let btnY = 325;
+        let btnW = 220; let btnH = 44;
+        if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+            gameState = 'MENU';
+        }
+        return;
+    }
+
     if (gameState === 'PAUSED') {
         togglePause();
         return;
     }
+
     if (gameState === 'VICTORY') {
         let btnX = canvas.width / 2 - 110;
-        let btnY = 300;
-        let btnW = 220; let btnH = 50;
+        let btnY1 = 270;
+        let btnY2 = 322;
+        let btnW = 220; let btnH = 42;
 
-        if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+        if (x >= btnX && x <= btnX + btnW && y >= btnY1 && y <= btnY1 + btnH) {
             requestAd('interstitial', () => {
                 currentLevel++;
+                if (currentLevel > maxUnlockedLevel) maxUnlockedLevel = currentLevel;
+                comboMultiplier = 1;
+                applyThemeVisuals();
                 saveProgress();
                 startGame();
             });
+        } else if (x >= btnX && x <= btnX + btnW && y >= btnY2 && y <= btnY2 + btnH) {
+            gameState = 'MAP';
         }
         return;
     }
+
     if (gameState === 'GAMEOVER') {
         let btn1X = canvas.width / 2 - 110;
         let btn1Y = canvas.height / 2 + 10;
-        let btn2Y = canvas.height / 2 + 65;
-        let btnW = 220; let btnH = 45;
+        let btn2Y = canvas.height / 2 + 62;
+        let btnW = 220; let btnH = 42;
 
         if (x >= btn1X && x <= btn1X + btnW && y >= btn1Y && y <= btn1Y + btnH) {
             requestAd('reward', (success) => {
@@ -841,7 +1110,11 @@ canvas.addEventListener('pointerdown', (e) => {
     
     if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
         if (activePowerup === 'hammer') {
-            useHammer(r, c);
+            if (hammerUsesLeft > 0) {
+                hammerUsesLeft--;
+                updatePowerupBadges();
+                useHammer(r, c);
+            }
             return;
         }
 
@@ -876,6 +1149,7 @@ function useHammer(r, c) {
     }
     grid[r][c] = null;
     shakeTime = 10;
+    comboMultiplier = 1;
     addFloatingText("🔨 CASSE !", px, py, '#34d399');
 
     setTimeout(() => {
@@ -883,7 +1157,7 @@ function useHammer(r, c) {
         setTimeout(() => {
             let matches = findMatches();
             if (matches.length > 0) {
-                processMatches(matches);
+                processMatches(matches, true);
             } else {
                 isAnimating = false;
                 resetIdleTimer();
@@ -903,8 +1177,9 @@ function swapAndCheck(r1, c1, r2, c2) {
         if (matches.length > 0) {
             movesLeft--;
             movesEl.textContent = movesLeft;
+            comboMultiplier = 1;
             playSound('match');
-            processMatches(matches);
+            processMatches(matches, false);
         } else {
             temp = grid[r1][c1];
             grid[r1][c1] = grid[r2][c2];
@@ -941,22 +1216,27 @@ function findMatches() {
     });
 }
 
-function processMatches(matches) {
-    let isBonus = matches.length >= 4;
-    let pointsGained = matches.length * (isBonus ? 120 : 60);
+function processMatches(matches, isChain) {
+    if (isChain) {
+        comboMultiplier = Math.min(comboMultiplier + 0.5, 3.5);
+    }
+
+    let isSuperBonus = matches.length >= 4;
+    let basePoints = matches.length * 45;
+    let pointsGained = Math.round(basePoints * comboMultiplier * (isSuperBonus ? 1.5 : 1.0));
     
     score += pointsGained;
     scoreEl.textContent = score;
     updateHighScore();
 
-    if (isBonus) {
+    if (isSuperBonus) {
         playSound('bonus');
         launchFireworks();
     } else {
         playSound('match');
     }
 
-    shakeTime = isBonus ? 14 : 6;
+    shakeTime = isSuperBonus ? 16 : 6;
     let avgX = 0, avgY = 0;
 
     matches.forEach(m => {
@@ -973,15 +1253,17 @@ function processMatches(matches) {
 
     avgX /= matches.length;
     avgY /= matches.length;
-    addFloatingText(isBonus ? `⭐ COMBO +${pointsGained}` : `+${pointsGained}`, avgX, avgY, isBonus ? '#fef08a' : '#38bdf8');
+    let comboTxt = isSuperBonus ? `⭐ SUPER COMBO ! +${pointsGained}` : `+${pointsGained}`;
+    addFloatingText(comboTxt, avgX, avgY, isSuperBonus ? '#fef08a' : '#38bdf8');
 
     setTimeout(() => {
         applyGravity();
         setTimeout(() => {
             let chainMatches = findMatches();
             if (chainMatches.length > 0) {
-                processMatches(chainMatches);
+                processMatches(chainMatches, true);
             } else {
+                comboMultiplier = 1;
                 isAnimating = false;
                 resetIdleTimer();
                 checkGameStatus();
@@ -1013,16 +1295,27 @@ function updateHighScore() {
         localStorage.setItem('alamina_highscore', highScore);
     }
     highScoreEl.textContent = highScore;
+    saveProgress();
 }
 
 function checkGameStatus() {
     if (gameState !== 'PLAYING') return;
     if (score >= targetScore) {
+        score += movesLeft * 50;
+        scoreEl.textContent = score;
+        updateHighScore();
+
         gameState = 'VICTORY';
         clearTimeout(idleTimer);
         stopBackgroundMusic();
         playSound('win');
         launchFireworks();
+
+        levelStars[currentLevel] = 3;
+        if (currentLevel >= maxUnlockedLevel) {
+            maxUnlockedLevel = currentLevel + 1;
+        }
+        saveProgress();
     } else if (movesLeft <= 0) {
         gameState = 'GAMEOVER';
         clearTimeout(idleTimer);
@@ -1033,19 +1326,21 @@ function checkGameStatus() {
 
 // Initialisation au chargement
 if (window.PokiSDK) window.PokiSDK.gameLoadingFinished();
-score = 0;
+applyThemeVisuals();
 GRID_SIZE = getGridSizeForLevel(currentLevel);
 TILE_SIZE = canvas.width / GRID_SIZE;
 let config = getLevelConfig(currentLevel);
 targetScore = config.target;
 levelInfoEl.textContent = config.name;
 scoreEl.textContent = score;
-movesEl.textContent = config.moves;
+movesEl.textContent = movesLeft;
 highScoreEl.textContent = highScore;
+hammerUsesLeft = 3;
+shuffleUsesLeft = 2;
+updatePowerupBadges();
 initGrid();
 gameState = 'MENU';
 startBackgroundMusic();
 resetIdleTimer();
 
-// Lancement immédiat de la boucle de rendu
 draw();
