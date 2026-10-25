@@ -1,14 +1,14 @@
-# A-LAMINA 💎
+# a-LAMINA 💎
 
-**A-Lamina** est un jeu de puzzle Match-3 professionnel, développé en HTML5 et JavaScript pur (Vanilla JS), conçu pour offrir une expérience fluide, "juteuse" et hautement engageante sur les portails de jeux web (comme Poki, CrazyGames, etc.).
+**a-Lamina** est un jeu de puzzle Match-3 professionnel, développé en HTML5 et JavaScript pur (Vanilla JS), conçu pour offrir une expérience fluide, "juteuse" et hautement engageante sur les portails de jeux web (comme Poki, CrazyGames, etc.).
 
 ## 🚀 Fonctionnalités
-- **Système de progression** sur 3 niveaux avec difficulté croissante.
-- **Rendu graphique 2D Canvas** avec des gemmes et cristaux facettés personnalisés.
-- **Effets visuels dynamiques** : Système de particules, textes flottants de score et secousses d'écran (*Screen Shake*).
+- **Système de progression dynamique** : Niveaux évolutifs avec grilles adaptatives et obstacles de glace (à partir du niveau 7).
+- **Rendu graphique 2D Canvas** avec des gemmes et cristaux facettés personnalisés, incluant un mode daltonien accessible.
+- **Effets visuels avancés** : Système de particules, textes flottants de score, feux d'artifice de victoire et secousses d'écran (*Screen Shake*).
 - **Audio immersif natif** propulsé par l'API Web Audio (aucun fichier externe lourd requis).
 - **Conformité Web Ads** : Gestion automatique de la pause en cas de perte de focus et Wrapper SDK intégré pour les publicités interstitielles et récompensées (*Rewarded Ads*).
-- **Persistance locale** des meilleurs scores et des niveaux atteints via `LocalStorage`.
+- **Persistance locale** des meilleurs scores, des étoiles et des niveaux atteints via `LocalStorage`.
 
 ## 🕹️ Jouer en ligne
 Le jeu est directement accessible et jouable via [GitHub Pages](https://takssgit.github.io/a-lamina/).

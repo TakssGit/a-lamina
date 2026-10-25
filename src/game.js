@@ -1,4 +1,4 @@
-// a-Lamina - Moteur avec Niveaux Avancés, Obstacles de Glace & SDK Officiel
+// a-Lamina - Moteur Complet Corrigé & Fonctionnel
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -106,13 +106,13 @@ function getGridSizeForLevel(lvl) {
     if (lvl <= 2) return 6;
     if (lvl <= 4) return 7;
     if (lvl <= 6) return 8;
-    return 9; // Niveaux avancés : grille maximale 9x9
+    return 9;
 }
 
 let GRID_SIZE = getGridSizeForLevel(currentLevel);
 let TILE_SIZE = canvas.width / GRID_SIZE;
 let grid = [];
-let iceGrid = []; // Matrice des obstacles de glace (niveau >= 7)
+let iceGrid = [];
 
 function getLevelConfig(lvl) {
     let baseTarget = 450 + (lvl - 1) * 320 + Math.floor(Math.pow(lvl, 1.2) * 90);
@@ -661,7 +661,6 @@ function drawGem(r, c, typeIdx) {
 
     ctx.restore();
 
-    // Rendu des obstacles de glace pour les niveaux avancés (>= 7)
     if (iceGrid && iceGrid[r] && iceGrid[r][c]) {
         ctx.fillStyle = 'rgba(186, 230, 253, 0.45)';
         ctx.strokeStyle = '#e0f2fe';
@@ -718,7 +717,6 @@ function initGrid() {
         iceGrid[r] = [];
         for (let c = 0; c < GRID_SIZE; c++) {
             grid[r][c] = Math.floor(Math.random() * GEM_TYPES.length);
-            // Ajout aléatoire d'obstacles de glace à partir du niveau 7
             iceGrid[r][c] = (currentLevel >= 7 && Math.random() < 0.25);
         }
     }
@@ -1167,7 +1165,7 @@ function useHammer(r, c) {
         createParticles(px, py, GEM_TYPES[val].color);
     }
     grid[r][c] = null;
-    if (iceGrid[r]) iceGrid[r][c] = false; // Casser la glace avec le marteau
+    if (iceGrid[r]) iceGrid[r][c] = false;
     shakeTime = 10;
     comboMultiplier = 1;
     addFloatingText("🔨 CASSE !", px, py, '#34d399');
@@ -1188,7 +1186,6 @@ function useHammer(r, c) {
 }
 
 function swapAndCheck(r1, c1, r2, c2) {
-    // Interdiction d'échanger directement un bloc sous glace figée
     if (iceGrid[r1][c1] || iceGrid[r2][c2]) {
         isAnimating = false;
         selectedTile = null;
@@ -1279,10 +1276,8 @@ function processMatches(matches, isChain) {
         }
         grid[m.r][m.c] = null;
 
-        // Casser la glace adjacente ou sur la case matchée
         if (iceGrid[m.r]) iceGrid[m.r][m.c] = false;
         
-        // Briser aussi la glace des cases directement adjacentes
         const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
         dirs.forEach(([dr, dc]) => {
             let nr = m.r + dr, nc = m.c + dc;
@@ -1317,14 +1312,13 @@ function applyGravity() {
     for (let c = 0; c < GRID_SIZE; c++) {
         let writeRow = GRID_SIZE - 1;
         for (let r = GRID_SIZE - 1; r >= 0; r--) {
-            // Ne fait pas tomber les blocs figés sous la glace
             if (grid[r][c] !== null && !iceGrid[r][c]) {
                 let temp = grid[r][c];
                 grid[r][c] = null;
                 grid[writeRow][c] = temp;
                 writeRow--;
             } else if (iceGrid[r][c]) {
-                writeRow = r - 1; // Bloque la chute au niveau de la glace
+                writeRow = r - 1;
             }
         }
         for (let r = writeRow; r >= 0; r--) {
@@ -1370,7 +1364,6 @@ function checkGameStatus() {
     }
 }
 
-// Initialisation au chargement
 if (window.PokiSDK) {
     window.PokiSDK.init().then(() => {
         window.PokiSDK.gameLoadingFinished();
