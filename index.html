@@ -16,7 +16,6 @@
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
-            /* Curseur standard ultra-visible sur tous les fonds colorés */
             cursor: pointer;
         }
 
@@ -25,7 +24,7 @@
             background: linear-gradient(180deg, #4c1d95 0%, #2e1065 100%);
             padding: 18px;
             border-radius: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(244, 114, 182, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(244, 114, 182, 0.4);
             border: 5px solid #f472b6;
             position: relative;
             max-width: 440px;
@@ -44,6 +43,12 @@
             letter-spacing: 1.5px;
             font-size: 1.7rem;
             text-shadow: 0 3px 6px rgba(0,0,0,0.8), 0 0 10px #f472b6;
+            animation: pulseTitle 2s infinite alternate;
+        }
+
+        @keyframes pulseTitle {
+            0% { transform: scale(1); text-shadow: 0 0 10px #f472b6; }
+            100% { transform: scale(1.03); text-shadow: 0 0 20px #fef08a; }
         }
 
         .header-buttons {
@@ -59,7 +64,7 @@
             height: 44px;
             border-radius: 50%;
             cursor: pointer;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -127,6 +132,7 @@
             border: 2px dashed #f472b6;
         }
 
+        /* Menu Paramètres Magiques */
         #settings-modal {
             display: none;
             position: absolute;
@@ -137,17 +143,35 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            gap: 14px;
+            gap: 12px;
             padding: 20px;
-            border: 4px solid #f472b6;
+            border: 5px solid #fcd34d;
+            box-shadow: inset 0 0 30px rgba(120, 53, 15, 0.8);
+            animation: fadeInModal 0.25s ease-out;
         }
-        #settings-modal h2 { color: #fef08a; font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+
+        @keyframes fadeInModal {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        #settings-modal h2 { 
+            color: #fef08a; 
+            font-size: 1.6rem; 
+            text-shadow: 0 3px 6px rgba(0,0,0,0.8), 0 0 10px #f472b6; 
+            margin-bottom: 5px;
+        }
         .modal-btn {
             background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
             color: white; border: 3px solid #bae6fd;
-            padding: 12px 20px; border-radius: 16px; font-weight: bold; font-size: 1.05rem;
+            padding: 11px 18px; border-radius: 18px; font-weight: bold; font-size: 1.05rem;
             cursor: pointer; box-shadow: 0 5px 0 #0369a1, 0 8px 12px rgba(0,0,0,0.4);
-            width: 85%;
+            width: 88%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: transform 0.08s ease;
         }
         .modal-btn.danger {
             background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
@@ -167,26 +191,26 @@
         <div class="header-top">
             <h1>✨ a-Lamina</h1>
             <div class="header-buttons">
-                <button id="settings-btn" class="btn-icon" title="Paramètres">⚙️</button>
-                <button id="pause-btn" class="btn-icon" title="Pause">⏸️</button>
+                <button id="settings-btn" class="btn-icon" title="Paramètres Magiques">🔮</button>
+                <button id="pause-btn" class="btn-icon" title="Pause Magique">⏳</button>
             </div>
         </div>
         <div id="level-info">Niveau 1</div>
         <div class="hud">
-            <div>Score : <span id="score">0</span> / <span id="target-score">600</span></div>
+            <div>Score : <span id="score">0</span> / <span id="target-score">1200</span></div>
             <div>Top : <span id="high-score">0</span></div>
-            <div>Coups : <span id="moves">15</span></div>
+            <div>Coups : <span id="moves">18</span></div>
         </div>
         <canvas id="gameCanvas" width="400" height="400"></canvas>
         <div class="instructions">⭐ Aligne 3 cristaux magiques ou plus ! ⭐</div>
 
         <div id="settings-modal">
-            <h2>⚙️ Paramètres Magiques</h2>
-            <button id="modal-sound" class="modal-btn">🔊 Bruitages : ACTIVÉS</button>
-            <button id="modal-music" class="modal-btn">🎶 Musique : ACTIVÉE</button>
-            <button id="modal-refresh" class="modal-btn warning">🔄 Actualiser la Partie</button>
-            <button id="modal-reset" class="modal-btn danger">⚠️ Recommencer au Niveau 1</button>
-            <button id="modal-close" class="modal-btn" style="background: linear-gradient(180deg, #64748b 0%, #334155 100%); border-color: #cbd5e1; box-shadow: 0 5px 0 #1e293b;">❌ Fermer</button>
+            <h2>🔮 Paramètres Magiques</h2>
+            <button id="modal-sound" class="modal-btn">🔊 Bruitages : <span id="sound-txt">ACTIVÉS</span></button>
+            <button id="modal-music" class="modal-btn">🎵 Musique : <span id="music-txt">ACTIVÉE</span></button>
+            <button id="modal-refresh" class="modal-btn warning">🪄 Actualiser la Partie</button>
+            <button id="modal-reset" class="modal-btn danger">🍄 Recommencer au Niveau 1</button>
+            <button id="modal-close" class="modal-btn" style="background: linear-gradient(180deg, #64748b 0%, #334155 100%); border-color: #cbd5e1; box-shadow: 0 5px 0 #1e293b;">🚪 Fermer</button>
         </div>
     </div>
 

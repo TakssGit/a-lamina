@@ -1,4 +1,4 @@
-// a-Lamina - Moteur Corrigé (Victoire instantanée sur score atteint, suppression blocage)
+// a-Lamina - Moteur Match-3 Équilibré & Indice Actif
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
@@ -15,12 +15,14 @@ const modalReset = document.getElementById('modal-reset');
 const modalClose = document.getElementById('modal-close');
 
 let currentLevel = parseInt(localStorage.getItem('alamina_level')) || 1;
-let score = parseInt(localStorage.getItem('alamina_score')) || 0;
-let movesLeft = parseInt(localStorage.getItem('alamina_moves'));
+let highScore = parseInt(localStorage.getItem('alamina_highscore')) || 0;
+
+let score = 0;
 
 function getGridSizeForLevel(lvl) {
     if (lvl === 1 || lvl === 2) return 6;
-    if (lvl === 3) return 7;
+    if (lvl === 3 || lvl === 4) return 7;
+    if (lvl === 5 || lvl === 6) return 8;
     return Math.min(9, 6 + Math.floor((lvl - 1) / 2));
 }
 
@@ -35,15 +37,17 @@ const GEM_TYPES = [
 ];
 
 let grid = [];
-let highScore = parseInt(localStorage.getItem('alamina_highscore')) || 0;
 
+// Formule de score équilibrée (Standard Candy Crush / Match-3 casual)
 function getLevelConfig(lvl) {
-    let size = getGridSizeForLevel(lvl);
-    let totalCells = size * size;
-    let target = Math.round(500 * Math.pow(1.35, lvl - 1) * (totalCells / 36));
-    let defaultMoves = Math.max(10, 16 - Math.floor(lvl / 2));
+    // Objectif de score progressif et réaliste pour une durée moyenne de jeu de 1 à 2 minutes
+    let baseTarget = 1200 + (lvl - 1) * 800 + Math.floor(Math.pow(lvl, 1.25) * 200);
+    baseTarget = Math.round(baseTarget / 100) * 100; // Arrondi propre
+
+    let defaultMoves = 18; // Nombre de coups standard par niveau
+
     return {
-        target: target,
+        target: baseTarget,
         moves: defaultMoves,
         name: `Niveau ${lvl}`
     };
@@ -51,31 +55,79 @@ function getLevelConfig(lvl) {
 
 let levelConfig = getLevelConfig(currentLevel);
 let targetScore = levelConfig.target;
-if (isNaN(movesLeft) || movesLeft <= 0) {
-    movesLeft = levelConfig.moves;
-}
+let movesLeft = levelConfig.moves;
 
 let selectedTile = null;
 let isAnimating = false;
 let gameState = 'MENU';
 let particles = [];
+let fireworks = [];
 let floatingTexts = [];
 let backgroundGems = [];
 let shakeTime = 0;
+
+// Système d'indice / suggestion automatique (3 secondes)
+let idleTimer = null;
+let suggestedMove = null;
+let hintPulseTimer = 0;
 
 let soundMuted = false;
 let musicMuted = false;
 let backgroundMusicInterval = null;
 
-for (let i = 0; i < 10; i++) {
+// Cristaux d'arrière-plan animés
+for (let i = 0; i < 12; i++) {
     backgroundGems.push({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        size: Math.random() * 14 + 8,
-        speedY: (Math.random() - 0.5) * 0.4,
-        speedX: (Math.random() - 0.5) * 0.4,
+        size: Math.random() * 16 + 8,
+        speedY: (Math.random() - 0.5) * 0.5,
+        speedX: (Math.random() - 0.5) * 0.5,
         type: Math.floor(Math.random() * GEM_TYPES.length)
     });
+}
+
+function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    suggestedMove = null;
+    if (gameState === 'PLAYING') {
+        idleTimer = setTimeout(() => {
+            findPossibleMove();
+        }, 3000); // 3 secondes d'inactivité
+    }
+}
+
+function findPossibleMove() {
+    for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            // Test échange horizontal
+            if (c < GRID_SIZE - 1) {
+                swapInGrid(r, c, r, c + 1);
+                if (findMatches().length > 0) {
+                    swapInGrid(r, c, r, c + 1);
+                    suggestedMove = [{ r: r, c: c }, { r: r, c: c + 1 }];
+                    return;
+                }
+                swapInGrid(r, c, r, c + 1);
+            }
+            // Test échange vertical
+            if (r < GRID_SIZE - 1) {
+                swapInGrid(r, c, r + 1, c);
+                if (findMatches().length > 0) {
+                    swapInGrid(r, c, r + 1, c);
+                    suggestedMove = [{ r: r, c: c }, { r: r + 1, c: c }];
+                    return;
+                }
+                swapInGrid(r, c, r + 1, c);
+            }
+        }
+    }
+}
+
+function swapInGrid(r1, c1, r2, c2) {
+    let temp = grid[r1][c1];
+    grid[r1][c1] = grid[r2][c2];
+    grid[r2][c2] = temp;
 }
 
 function startBackgroundMusic() {
@@ -113,17 +165,14 @@ function stopBackgroundMusic() {
     }
 }
 
-window.addEventListener('beforeunload', () => {
-    localStorage.setItem('alamina_level', currentLevel);
-    localStorage.setItem('alamina_score', score);
-    localStorage.setItem('alamina_moves', movesLeft);
-});
-
 function saveProgress() {
     localStorage.setItem('alamina_level', currentLevel);
-    localStorage.setItem('alamina_score', score);
-    localStorage.setItem('alamina_moves', movesLeft);
+    localStorage.setItem('alamina_highscore', highScore);
 }
+
+window.addEventListener('beforeunload', () => {
+    saveProgress();
+});
 
 function requestAd(type, onComplete) {
     let previousState = gameState;
@@ -193,16 +242,17 @@ settingsBtn.addEventListener('click', () => {
 modalClose.addEventListener('click', () => {
     settingsModal.style.display = 'none';
     if (gameState === 'PAUSED') gameState = 'PLAYING';
+    resetIdleTimer();
 });
 
 modalSound.addEventListener('click', () => {
     soundMuted = !soundMuted;
-    modalSound.textContent = soundMuted ? "🔇 Bruitages : DÉSACTIVÉS" : "🔊 Bruitages : ACTIVÉS";
+    document.getElementById('sound-txt').textContent = soundMuted ? "DÉSACTIVÉS" : "ACTIVÉS";
 });
 
 modalMusic.addEventListener('click', () => {
     musicMuted = !musicMuted;
-    modalMusic.textContent = musicMuted ? "🔕 Musique : DÉSACTIVÉE" : "🎶 Musique : ACTIVÉE";
+    document.getElementById('music-txt').textContent = musicMuted ? "DÉSACTIVÉE" : "ACTIVÉE";
     if (musicMuted) stopBackgroundMusic();
     else startBackgroundMusic();
 });
@@ -211,7 +261,6 @@ modalRefresh.addEventListener('click', () => {
     score = 0;
     let config = getLevelConfig(currentLevel);
     movesLeft = config.moves;
-    saveProgress();
     settingsModal.style.display = 'none';
     loadLevel();
 });
@@ -220,11 +269,11 @@ modalReset.addEventListener('click', () => {
     if (confirm("Voulez-vous recommencer toute l'aventure au Niveau 1 ?")) {
         currentLevel = 1;
         score = 0;
+        localStorage.clear();
         let config = getLevelConfig(1);
         movesLeft = config.moves;
-        localStorage.clear();
-        saveProgress();
         settingsModal.style.display = 'none';
+        grid = [];
         loadLevel();
     }
 });
@@ -293,13 +342,36 @@ function playSound(type) {
     } catch (e) {}
 }
 
+function launchFireworks() {
+    for (let f = 0; f < 3; f++) {
+        let fx = Math.random() * canvas.width;
+        let fy = Math.random() * (canvas.height / 2) + 50;
+        let colors = ['#f43f5e', '#38bdf8', '#fbbf24', '#34d399', '#fef08a'];
+        let baseColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        for (let i = 0; i < 30; i++) {
+            let angle = Math.random() * Math.PI * 2;
+            let speed = Math.random() * 6 + 2;
+            fireworks.push({
+                x: fx, y: fy,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: Math.random() * 4 + 2,
+                color: baseColor,
+                alpha: 1,
+                decay: Math.random() * 0.02 + 0.015
+            });
+        }
+    }
+}
+
 function createParticles(pixelX, pixelY, color) {
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 18; i++) {
         particles.push({
             x: pixelX, y: pixelY,
-            vx: (Math.random() - 0.5) * 9,
-            vy: (Math.random() - 0.5) * 9,
-            size: Math.random() * 5 + 2,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            size: Math.random() * 6 + 2,
             color: color, alpha: 1
         });
     }
@@ -319,7 +391,7 @@ function updateAndDrawEffects() {
         if (bg.y > canvas.height) bg.y = 0;
 
         ctx.save();
-        ctx.globalAlpha = 0.3;
+        ctx.globalAlpha = 0.25;
         let gem = GEM_TYPES[bg.type];
         ctx.fillStyle = gem.color;
         ctx.beginPath();
@@ -328,9 +400,28 @@ function updateAndDrawEffects() {
         ctx.restore();
     });
 
+    for (let i = fireworks.length - 1; i >= 0; i--) {
+        let fw = fireworks[i];
+        fw.x += fw.vx;
+        fw.y += fw.vy;
+        fw.vy += 0.08;
+        fw.alpha -= fw.decay;
+        if (fw.alpha <= 0) {
+            fireworks.splice(i, 1);
+        } else {
+            ctx.save();
+            ctx.globalAlpha = fw.alpha;
+            ctx.fillStyle = fw.color;
+            ctx.beginPath();
+            ctx.arc(fw.x, fw.y, fw.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
     for (let i = particles.length - 1; i >= 0; i--) {
         let p = particles[i];
-        p.x += p.vx; p.y += p.vy; p.alpha -= 0.04;
+        p.x += p.vx; p.y += p.vy; p.alpha -= 0.035;
         if (p.alpha <= 0) {
             particles.splice(i, 1);
         } else {
@@ -347,14 +438,14 @@ function updateAndDrawEffects() {
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
         let ft = floatingTexts[i];
         ft.y -= 1.5;
-        ft.alpha -= 0.03;
+        ft.alpha -= 0.025;
         if (ft.alpha <= 0) {
             floatingTexts.splice(i, 1);
         } else {
             ctx.save();
             ctx.globalAlpha = ft.alpha;
             ctx.fillStyle = ft.color;
-            ctx.font = 'bold 18px Segoe UI';
+            ctx.font = 'bold 20px Segoe UI';
             ctx.textAlign = 'center';
             ctx.fillText(ft.text, ft.x, ft.y);
             ctx.restore();
@@ -414,6 +505,9 @@ function drawGem(r, c, typeIdx) {
 
 function startGame() {
     gameState = 'PLAYING';
+    score = 0;
+    let config = getLevelConfig(currentLevel);
+    movesLeft = config.moves;
     startBackgroundMusic();
     loadLevel();
 }
@@ -424,25 +518,23 @@ function loadLevel() {
 
     let config = getLevelConfig(currentLevel);
     targetScore = config.target;
-    if (isNaN(movesLeft) || movesLeft <= 0) {
-        movesLeft = config.moves;
-    }
     
     scoreEl.textContent = score;
     document.getElementById('target-score').textContent = targetScore;
     movesEl.textContent = movesLeft;
     levelInfoEl.textContent = config.name;
     highScoreEl.textContent = highScore;
+    
+    initGrid();
+    gameState = 'PLAYING';
     saveProgress();
-    pauseBtn.textContent = "⏸️";
-    if (grid.length === 0 || grid.length !== GRID_SIZE) {
-        initGrid();
-    }
-    checkGameStatus(); // Vérifie immédiatement si le score est déjà atteint
+    pauseBtn.textContent = "⏳";
+    resetIdleTimer();
     draw();
 }
 
 function initGrid() {
+    grid = [];
     do {
         for (let r = 0; r < GRID_SIZE; r++) {
             grid[r] = [];
@@ -474,6 +566,8 @@ function draw() {
         shakeTime--;
     }
 
+    hintPulseTimer += 0.08;
+
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
             ctx.strokeStyle = 'rgba(252, 211, 77, 0.15)';
@@ -486,13 +580,23 @@ function draw() {
             }
             
             if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
-                // Contour lumineux très visible sur tous les cristaux
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 5;
                 ctx.strokeRect(c * TILE_SIZE + 2, r * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
                 ctx.strokeStyle = '#f472b6';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(c * TILE_SIZE + 4, r * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+            }
+
+            // Indice automatique (Scintillement après 3s d'inactivité)
+            if (suggestedMove && !selectedTile) {
+                let isHintTile = suggestedMove.some(pos => pos.r === r && pos.c === c);
+                if (isHintTile) {
+                    let pulse = Math.abs(Math.sin(hintPulseTimer)) * 5 + 2;
+                    ctx.strokeStyle = '#fef08a';
+                    ctx.lineWidth = pulse;
+                    ctx.strokeRect(c * TILE_SIZE + 3, r * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+                }
             }
         }
     }
@@ -507,32 +611,40 @@ function draw() {
     } else if (gameState === 'GAMEOVER') {
         drawGameOverOverlay();
     } else if (gameState === 'PAUSED') {
-        drawOverlay("EN PAUSE", "#38bdf8", "Touchez Pause pour Reprendre");
+        drawOverlay("EN PAUSE", "#38bdf8", "Touchez pour Reprendre");
     }
 
-    if (particles.length > 0 || floatingTexts.length > 0 || shakeTime > 0 || gameState !== 'PLAYING' || gameState === 'MENU') {
-        requestAnimationFrame(draw);
-    }
+    requestAnimationFrame(draw);
 }
 
 function drawMainMenuOverlay() {
-    ctx.fillStyle = 'rgba(15, 3, 28, 0.92)';
+    ctx.fillStyle = 'rgba(15, 3, 28, 0.94)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     updateAndDrawEffects();
 
+    let boxX = 30; let boxY = 60; let boxW = canvas.width - 60; let boxH = 260;
+    ctx.fillStyle = 'rgba(76, 29, 149, 0.85)';
+    ctx.strokeStyle = '#fcd34d';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 24); ctx.fill(); ctx.stroke();
+
     ctx.fillStyle = '#fef08a';
-    ctx.font = 'bold 38px Segoe UI';
+    ctx.font = 'bold 36px Segoe UI';
     ctx.textAlign = 'center';
-    ctx.fillText("a-Lamina", canvas.width / 2, canvas.height / 2 - 50);
+    ctx.fillText("✨ a-Lamina ✨", canvas.width / 2, boxY + 55);
 
     ctx.fillStyle = '#f472b6';
-    ctx.font = '16px Segoe UI';
-    ctx.fillText("L'Aventure des Cristaux Magiques", canvas.width / 2, canvas.height / 2 - 15);
+    ctx.font = 'bold 18px Segoe UI';
+    ctx.fillText(`Aventure - Niveau ${currentLevel}`, canvas.width / 2, boxY + 100);
 
-    let btnX = canvas.width / 2 - 80;
-    let btnY = canvas.height / 2 + 15;
-    let btnW = 160;
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '15px Segoe UI';
+    ctx.fillText(`Objectif : 0 / ${targetScore} pts`, canvas.width / 2, boxY + 135);
+
+    let btnX = canvas.width / 2 - 90;
+    let btnY = boxY + 175;
+    let btnW = 180;
     let btnH = 54;
 
     ctx.fillStyle = '#10b981';
@@ -554,31 +666,31 @@ function drawVictoryProgressionOverlay() {
     updateAndDrawEffects();
 
     ctx.fillStyle = '#fef08a';
-    ctx.font = 'bold 34px Segoe UI';
+    ctx.font = 'bold 32px Segoe UI';
     ctx.textAlign = 'center';
-    ctx.fillText("✨ NIVEAU RÉUSSI ! ✨", canvas.width / 2, 70);
+    ctx.fillText("✨ NIVEAU RÉUSSI ! ✨", canvas.width / 2, 65);
 
     ctx.font = '36px Segoe UI';
-    ctx.fillText("⭐ ⭐ ⭐", canvas.width / 2, 120);
+    ctx.fillText("⭐ ⭐ ⭐", canvas.width / 2, 115);
 
-    let boxX = 40; let boxY = 145; let boxW = canvas.width - 80; let boxH = 140;
-    ctx.fillStyle = 'rgba(76, 29, 149, 0.8)';
+    let boxX = 35; let boxY = 140; let boxW = canvas.width - 70; let boxH = 150;
+    ctx.fillStyle = 'rgba(76, 29, 149, 0.88)';
     ctx.strokeStyle = '#fcd34d';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 16); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 20); ctx.fill(); ctx.stroke();
 
     ctx.fillStyle = '#fbcfe8';
-    ctx.font = '16px Segoe UI';
-    ctx.fillText(`Progression : ${currentLevel - 1} ➔ ${currentLevel}`, canvas.width / 2, boxY + 35);
+    ctx.font = 'bold 17px Segoe UI';
+    ctx.fillText(`Niveau ${currentLevel} ➔ Niveau ${currentLevel + 1}`, canvas.width / 2, boxY + 38);
     ctx.fillStyle = '#38bdf8';
     ctx.font = 'bold 18px Segoe UI';
-    ctx.fillText(`Score Validé : ${score} pts`, canvas.width / 2, boxY + 70);
+    ctx.fillText(`Score Validé : ${score} pts`, canvas.width / 2, boxY + 78);
     ctx.fillStyle = '#34d399';
     ctx.font = '15px Segoe UI';
-    ctx.fillText(`Nouveau Record : ${highScore}`, canvas.width / 2, boxY + 105);
+    ctx.fillText(`Meilleur Record : ${highScore}`, canvas.width / 2, boxY + 115);
 
     let btnX = canvas.width / 2 - 110;
-    let btnY = 310;
+    let btnY = 315;
     let btnW = 220; let btnH = 50;
 
     ctx.fillStyle = '#10b981';
@@ -640,10 +752,12 @@ function togglePause() {
     if (gameState === 'PLAYING') {
         gameState = 'PAUSED';
         pauseBtn.textContent = "▶️";
+        clearTimeout(idleTimer);
         draw();
     } else if (gameState === 'PAUSED') {
         gameState = 'PLAYING';
-        pauseBtn.textContent = "⏸️";
+        pauseBtn.textContent = "⏳";
+        resetIdleTimer();
         draw();
     }
 }
@@ -653,6 +767,7 @@ window.addEventListener('blur', () => {
     if (gameState === 'PLAYING') {
         gameState = 'PAUSED';
         pauseBtn.textContent = "▶️";
+        clearTimeout(idleTimer);
         draw();
     }
 });
@@ -674,16 +789,14 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (gameState === 'VICTORY') {
         let btnX = canvas.width / 2 - 110;
-        let btnY = 310;
+        let btnY = 315;
         let btnW = 220; let btnH = 50;
 
         if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
             requestAd('interstitial', () => {
-                currentLevel++; 
-                score = 0; 
-                let config = getLevelConfig(currentLevel);
-                movesLeft = config.moves;
-                loadLevel();
+                currentLevel++;
+                saveProgress();
+                startGame();
             });
         }
         return;
@@ -700,19 +813,20 @@ canvas.addEventListener('pointerdown', (e) => {
                     movesLeft += 5;
                     movesEl.textContent = movesLeft;
                     gameState = 'PLAYING';
+                    resetIdleTimer();
                     draw();
                 }
             });
         } else if (x >= btn1X && x <= btn1X + btnW && y >= btn2Y && y <= btn2Y + btnH) {
-            score = 0;
-            movesLeft = getLevelConfig(currentLevel).moves;
-            loadLevel();
+            startGame();
         }
         return;
     }
 
     if (isAnimating || movesLeft <= 0 || gameState !== 'PLAYING') return;
     
+    resetIdleTimer();
+
     const c = Math.floor(x / TILE_SIZE);
     const r = Math.floor(y / TILE_SIZE);
     
@@ -746,7 +860,6 @@ function swapAndCheck(r1, c1, r2, c2) {
         if (matches.length > 0) {
             movesLeft--;
             movesEl.textContent = movesLeft;
-            saveProgress();
             playSound('match');
             processMatches(matches);
         } else {
@@ -754,6 +867,7 @@ function swapAndCheck(r1, c1, r2, c2) {
             grid[r1][c1] = grid[r2][c2];
             grid[r2][c2] = temp;
             isAnimating = false;
+            resetIdleTimer();
             draw();
         }
     }, 200);
@@ -787,17 +901,22 @@ function findMatches() {
 
 function processMatches(matches) {
     let isBonus = matches.length >= 4;
-    let baseMultiplier = GRID_SIZE * 15;
-    let pointsGained = matches.length * (isBonus ? baseMultiplier * 2 : baseMultiplier);
+    
+    // Formule de score équilibrée standard (60 pts par cristal, 120 pts pour les super combos)
+    let pointsGained = matches.length * (isBonus ? 120 : 60);
     
     score += pointsGained;
     scoreEl.textContent = score;
     updateHighScore();
-    saveProgress();
 
-    if (isBonus) playSound('bonus');
+    if (isBonus) {
+        playSound('bonus');
+        launchFireworks(); // Feux d'artifice spectaculaires pour les super combos !
+    } else {
+        playSound('match');
+    }
 
-    shakeTime = isBonus ? 14 : 8;
+    shakeTime = isBonus ? 14 : 6;
     let avgX = 0, avgY = 0;
 
     matches.forEach(m => {
@@ -814,13 +933,12 @@ function processMatches(matches) {
 
     avgX /= matches.length;
     avgY /= matches.length;
-    addFloatingText(isBonus ? `SUPER COMBO +${pointsGained}` : `+${pointsGained}`, avgX, avgY, isBonus ? '#fef08a' : '#38bdf8');
+    addFloatingText(isBonus ? `⭐ COMBO +${pointsGained}` : `+${pointsGained}`, avgX, avgY, isBonus ? '#fef08a' : '#38bdf8');
 
     draw();
 
     setTimeout(() => {
         applyGravity();
-        saveProgress();
         draw();
 
         setTimeout(() => {
@@ -829,6 +947,7 @@ function processMatches(matches) {
                 processMatches(chainMatches);
             } else {
                 isAnimating = false;
+                resetIdleTimer();
                 checkGameStatus();
             }
         }, 300);
@@ -852,14 +971,26 @@ function applyGravity() {
     }
 }
 
+function updateHighScore() {
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('alamina_highscore', highScore);
+    }
+    highScoreEl.textContent = highScore;
+}
+
 function checkGameStatus() {
+    if (gameState !== 'PLAYING') return;
     if (score >= targetScore) {
         gameState = 'VICTORY';
+        clearTimeout(idleTimer);
         stopBackgroundMusic();
         playSound('win');
+        launchFireworks(); // Feux d'artifice de victoire !
         draw();
     } else if (movesLeft <= 0) {
         gameState = 'GAMEOVER';
+        clearTimeout(idleTimer);
         stopBackgroundMusic();
         playSound('gameover');
         draw();
@@ -868,14 +999,15 @@ function checkGameStatus() {
 
 // Initialisation au chargement
 if (window.PokiSDK) window.PokiSDK.gameLoadingFinished();
+score = 0;
 GRID_SIZE = getGridSizeForLevel(currentLevel);
 TILE_SIZE = canvas.width / GRID_SIZE;
 let config = getLevelConfig(currentLevel);
 targetScore = config.target;
 levelInfoEl.textContent = config.name;
 scoreEl.textContent = score;
-movesEl.textContent = movesLeft;
+movesEl.textContent = config.moves;
 highScoreEl.textContent = highScore;
 initGrid();
-checkGameStatus();
+gameState = 'MENU';
 draw();
